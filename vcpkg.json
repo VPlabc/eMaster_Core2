@@ -1,0 +1,17 @@
+{
+  "name": "hsf-smart-gateway",
+  "version": "0.1.0",
+  "description": "Smart Gateway Backend System - REST/Serial/Modbus TCP/RFID bridge with embedded Lua scripting and a web monitoring dashboard.",
+  "builtin-baseline": "39344dff01c5a5a0134caf2624cdd492f05d30ea",
+  "dependencies": [
+    "curl",
+    "nlohmann-json",
+    "lua",
+    "asio",
+    "crow",
+    "sqlite3",
+    "amqpcpp",
+    "openssl",
+    "libsodium"
+  ]
+}

@@ -1,0 +1,71 @@
+build/
+build-*/
+vcpkg_installed/
+
+# Release packaging output (scripts/package.ps1 / package.sh). Artifacts are
+# published as GitHub Release assets, never committed.
+dist/
+.vs/
+.vscode/
+*.dylib
+*.so
+*.dll
+*.exe
+compile_commands.json
+config/logs/*.log
+
+# The vendored ZKTeco PullSDK DLLs are source, not build output -- nothing in
+# this repo can rebuild them, and CMake copies them next to the exe as a
+# post-build step. Has to come after the blanket *.dll above to win.
+!third_party/plcommpro/bin/*.dll
+
+# Leftovers from an in-source `cmake .` run (the supported build is out-of-
+# source, into build-win/ -- see build.bat).
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+!plugins/c3protocol/Makefile
+!plugins/modbus/Makefile
+# ...and a macOS arm64 binary from a Mac build of the same tree.
+/hsf_gateway
+
+# Runtime state, not configuration to share: config.db/config.json carry the
+# REST api_key and clients.db carries generated per-client API keys. Losing
+# them costs nothing (ConfigManager recreates config.db from defaults), and
+# committing them would publish credentials.
+config/*.db
+# logs.db runs in WAL mode, which keeps two sidecar files beside it.
+config/*.db-wal
+config/*.db-shm
+config/config.json
+config/logs/
+
+# SmartLocker's local store: who holds which locker, plus its backup and the
+# database the tests write. Site data, not configuration to share -- the schema
+# is recreated from smartlocker.json on first run.
+config/scripts/smartlocker/data/*.json
+config/scripts/smartlocker/data/*.json.bak
+config/scripts/smartlocker/data/*.json.tmp
+
+config/scripts/
+config/script_Tests/
+request/
+
+# Ubuntu build via scripts/build-ubuntu.sh (its own vcpkg checkout and cache)
+.vcpkg/
+.vcpkg-cache/
+build-ubuntu/
+
+# Generated secrets. lua_package.key is the XChaCha20-Poly1305 key that Lua
+# bundles are encrypted with and the Ed25519 signing key material lives beside
+# it -- committing either would make every signed bundle forgeable.
+config/lua_signing.key
+config/lua_package.key
+config/lua_signing.key
+# The Ed25519 secret belongs on build machines only -- committing it lets
+# anyone forge a package this fleet will accept. The .pub is harmless.
+
+config/security.db
+config/security.db-shm
+config/security.db-wal

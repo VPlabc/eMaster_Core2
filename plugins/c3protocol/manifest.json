@@ -1,0 +1,14 @@
+{
+  "id": "hsf.driver.c3protocol",
+  "name": "HSF C3 Protocol Driver",
+  "version": "1.1.2",
+  "api_version": "1.0",
+  "entry": "plugin.so",
+  "kind": "driver",
+  "description": "Native C11 ZKTeco C3/InBio driver with RTLog, input state and relay pulse control",
+  "author": "HSF",
+  "execution": "in_process",
+  "platforms": ["linux-x86_64", "linux-arm64", "linux-armhf"],
+  "transports": ["tcp", "mock"],
+  "permissions": ["network"]
+}

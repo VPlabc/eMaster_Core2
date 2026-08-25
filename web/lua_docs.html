@@ -1,0 +1,1131 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>eMaster Gateway - Lua API Documentation</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="css/app.css" rel="stylesheet">
+  <!-- Must run before first paint so the stored theme is already on <html>;
+       loading it with the scripts at the end of <body> flashes light-then-dark. -->
+  <script src="js/theme.js"></script>
+  <!-- Gates the page: redirects to /login.html when there is no session, and
+       enforces any hsf-require-role meta above. Must precede layout.js. -->
+  <script src="js/auth.js"></script>
+</head>
+<body>
+  <div id="hsfNav"></div>
+
+  <div class="container py-4">
+    <h3 class="mb-4">Lua API Reference</h3>
+
+    <h4>Rest</h4>
+
+    <div class="api-doc-block">
+      <h5><code>Rest.SetUrl(url)</code></h5>
+      <p>Sets the base server URL used by <code>Rest.Get</code> / <code>Rest.PostForm</code>.
+        <code>Rest.SetServer(url)</code> is an alias for this — same function, either name.</p>
+      <p><strong>Parameters:</strong> <code>url</code> (string)</p>
+      <p><strong>Return:</strong> none</p>
+      <p><strong>Example:</strong></p>
+      <pre>Rest.SetUrl("http://0.0.0.0:8090")
+-- or, identically:
+Rest.SetServer("http://0.0.0.0:8090")</pre>
+    </div>
+
+    <div class="api-doc-block">
+      <h5><code>Rest.SetApiKey(key)</code></h5>
+      <p>Sets the <code>API-Key</code> header value sent with every request.</p>
+      <p><strong>Parameters:</strong> <code>key</code> (string)</p>
+      <p><strong>Return:</strong> none</p>
+    </div>
+
+    <div class="api-doc-block">
+      <h5><code>Rest.PostForm([path,] data)</code></h5>
+      <p>Sends <code>data</code> as <code>multipart/form-data</code>, retrying up to the configured retry count.
+        With one argument, posts to the server URL set via <code>Rest.SetUrl</code>/<code>Rest.SetServer</code>
+        as-is. With two, <code>path</code> is joined onto that server URL (e.g. server
+        <code>http://0.0.0.0:8090</code> + path <code>/api/citizen/verify</code>) — handy when posting to
+        different endpoints on the same server without calling <code>Rest.SetUrl</code> before every request.</p>
+      <p><strong>Parameters:</strong> <code>path</code> (string, optional), <code>data</code> (table of string =&gt; string)</p>
+      <p><strong>Return:</strong> a table: <code>ok</code> (boolean), <code>status</code> (integer),
+        <code>body</code> (string, raw response body). If the response body is a JSON object, its top-level
+        fields are merged into this same table — a server reply like <code>{"success":true,"message":"OK"}</code>
+        is readable directly as <code>result.success</code> / <code>result.message</code>, no separate JSON
+        decoding needed.</p>
+      <p><strong>Example:</strong></p>
+      <pre>local result = Rest.PostForm("/api/citizen/verify", { card = cardJson })
+if result.success then
+  Log.Info("verified")
+else
+  Log.Error(result.message or "verify failed, status " .. tostring(result.status))
+end</pre>
+    </div>
+
+    <div class="api-doc-block">
+      <h5><code>Rest.Get([pathOrUrl])</code></h5>
+      <p>Performs an HTTP GET. The optional argument is either a full URL (used as-is, if it contains
+        <code>://</code>) or a path joined onto the configured server URL, same as
+        <code>Rest.PostForm</code>'s path argument. Omit it to GET the configured server URL directly.</p>
+      <p><strong>Parameters:</strong> <code>pathOrUrl</code> (string, optional)</p>
+      <p><strong>Return:</strong> same table shape as <code>Rest.PostForm</code>: <code>ok</code>, <code>status</code>,
+        <code>body</code>, plus any top-level JSON object fields from the response merged in.</p>
+    </div>
+
+    <h4 class="mt-4">Serial</h4>
+
+    <p><strong>C++ owns the port, not your script.</strong> The gateway opens both serial ports at startup and keeps
+      them open, with a background worker that reopens either one if it drops (1&nbsp;s / 2&nbsp;s / 5&nbsp;s backoff).
+      A script never has to manage the hardware, and never waits on a reconnect: reads simply return
+      <code>nil</code> while a port is down. See <code>docs/FixSerial.md</code>.</p>
+
+    <p>So the old pattern is now wasteful rather than necessary:</p>
+    <pre>-- Don't: pays an open/close cycle every iteration
+while true do
+  Serial.Open()
+  local data = Serial.Read()
+  Serial.Close()
+  Sleep(100)
+end
+
+-- Do: the port is already open
+while true do
+  local data = Serial.Read()
+  if data then ProcessSerialData(data) end
+  Sleep(100)
+end</pre>
+
+    <div class="api-doc-block">
+      <h5><code>Serial.Open()</code></h5>
+      <p>Opens the serial port using the currently configured settings (port, baud rate, parity, stop/data bits).
+        <strong>Idempotent:</strong> calling it on a port that is already open with the same settings does nothing and
+        returns <code>true</code> immediately — it does not close and reopen. Only a changed port or changed settings
+        cause a real reopen.</p>
+      <p>When the port cannot be opened, a background worker keeps retrying, so a reader that is plugged in later
+        comes up on its own without the script calling <code>Serial.Open()</code> again.</p>
+      <p><strong>Return:</strong> <code>ok</code> (boolean) — whether the port is open <em>now</em></p>
+    </div>
+    <div class="api-doc-block">
+      <h5><code>Serial.Close()</code> · <code>Serial.Release()</code></h5>
+      <p><strong>Does not close the hardware.</strong> It releases your script's claim on the port; the physical port
+        stays open and keeps receiving. The two names are the same function.</p>
+      <p>This is deliberate: the reader is permanently attached and the gateway is its only user, so a script that
+        closed the port between polls was paying a full open/close cycle per iteration — which is what made the
+        workflow stall for seconds at a time. Existing scripts that call <code>Serial.Close()</code> keep working;
+        the call is now just cheap.</p>
+      <p><strong>Return:</strong> none</p>
+    </div>
+    <div class="api-doc-block">
+      <h5><code>Serial.Shutdown()</code></h5>
+      <p>Actually closes the physical port and stops its worker (including any reconnect attempts). For handing the
+        device to another program, or a deliberate teardown — not for use in a polling loop.</p>
+      <p><strong>Return:</strong> none</p>
+    </div>
+    <div class="api-doc-block">
+      <h5><code>Serial.IsOpen()</code></h5>
+      <p><strong>Return:</strong> <code>bool</code> — whether the port is open right now.</p>
+    </div>
+    <div class="api-doc-block">
+      <h5><code>Serial.Status()</code></h5>
+      <p>Connection state as a string: <code>OPEN</code>, <code>CLOSED</code>, <code>RECONNECTING</code> (configured,
+        worker retrying in the background) or <code>ERROR</code> (open failed and auto-reconnect is off).</p>
+      <p><strong>Return:</strong> <code>string</code></p>
+      <p><strong>Example:</strong></p>
+      <pre>if Serial.Status() ~= "OPEN" then
+  Log.Warning("Card reader offline: " .. Serial.Status())
+end</pre>
+    </div>
+    <div class="api-doc-block">
+      <h5><code>Serial.Read()</code></h5>
+      <p>Returns all raw bytes received since the last call to <code>Serial.Read()</code>, or <code>nil</code> if
+        none arrived. No line-splitting or other framing is applied — this returns exactly what the device sent,
+        whole and unmodified, including any embedded <code>\r</code>/<code>\n</code>/<code>\0</code> bytes that
+        are part of the payload rather than a delimiter. If your device frames messages with a real delimiter
+        or fixed length, do that parsing in the script.</p>
+      <p><strong>Return:</strong> <code>data</code> (string or nil)</p>
+    </div>
+    <div class="api-doc-block">
+      <h5><code>Serial.Write(text)</code></h5>
+      <p>Writes raw text to the serial port.</p>
+      <p><strong>Parameters:</strong> <code>text</code> (string)</p>
+      <p><strong>Return:</strong> <code>ok</code> (boolean)</p>
+    </div>
+
+    <h4 class="mt-4">Serial2</h4>
+
+    <p>A second, fully independent serial port, configured under <code>serial2</code> on the Configuration page.
+      It drives the TDM-800 LED display (see <code>request/LEDBoard.md</code>); scripts normally use
+      <code>require("led")</code> rather than these directly, since <code>led.lua</code> owns the frame format.
+      Same four calls as <code>Serial</code> above, with two differences worth knowing:</p>
+    <ul>
+      <li><code>Serial2.Write</code> is binary-safe: LED frames start with a <code>0x00</code> command byte and end
+        with <code>0x0D</code>, so the whole string is written by length rather than stopping at the first null.</li>
+      <li><code>Serial2.Read</code> does not deliver queued events the way <code>Serial.Read</code> does &mdash;
+        that behaviour exists for scripts polling the citizen reader, and this port isn't that.</li>
+    </ul>
+
+    <p>It has the same full set of calls and the same lifecycle rules as <code>Serial</code> above, on its own
+      independent port, worker and buffers: <code>Open</code> (idempotent), <code>Close</code>/<code>Release</code>
+      (releases the claim, port stays open), <code>Shutdown</code> (really closes), <code>Read</code>,
+      <code>Write</code>, <code>IsOpen</code> and <code>Status</code>. Neither port can block or interfere with the
+      other.</p>
+
+    <div class="api-doc-block">
+      <h5><code>Serial2.Open()</code></h5>
+      <p>Opens the port using the <code>serial2</code> settings from the Configuration page.</p>
+      <p><strong>Return:</strong> <code>ok</code> (boolean)</p>
+    </div>
+    <div class="api-doc-block">
+      <h5><code>Serial2.Close()</code></h5>
+      <p><strong>Return:</strong> none</p>
+    </div>
+    <div class="api-doc-block">
+      <h5><code>Serial2.Read()</code></h5>
+      <p>Raw bytes received since the last call, or <code>nil</code>. No framing applied.</p>
+      <p><strong>Return:</strong> <code>data</code> (string or nil)</p>
+    </div>
+    <div class="api-doc-block">
+      <h5><code>Serial2.Write(data)</code></h5>
+      <p>Writes <code>data</code> verbatim, embedded null bytes included.</p>
+      <p><strong>Parameters:</strong> <code>data</code> (string)</p>
+      <p><strong>Return:</strong> <code>ok</code> (boolean)</p>
+      <p><strong>Example:</strong> prefer the <code>led</code> module, which owns the frame format:</p>
+      <pre>local Led = require("led")
+Led.Show("Moi quet CCCD")</pre>
+    </div>
+
+    <h4 class="mt-4">Tcp</h4>
+
+    <div class="api-doc-block">
+      <h5><code>Tcp.Connect(ip, port)</code></h5>
+      <p>Opens an ad-hoc TCP connection for use by the script (separate from the gateway's dedicated RFID/Modbus connections).</p>
+      <p><strong>Parameters:</strong> <code>ip</code> (string), <code>port</code> (integer)</p>
+      <p><strong>Return:</strong> <code>ok</code> (boolean)</p>
+    </div>
+    <div class="api-doc-block">
+      <h5><code>Tcp.Send(data)</code></h5>
+      <p><strong>Parameters:</strong> <code>data</code> (string)</p>
+      <p><strong>Return:</strong> <code>ok</code> (boolean)</p>
+    </div>
+    <div class="api-doc-block">
+      <h5><code>Tcp.Receive()</code></h5>
+      <p>Blocks up to ~1 second waiting for data.</p>
+      <p><strong>Return:</strong> <code>data</code> (string or nil on timeout)</p>
+    </div>
+    <div class="api-doc-block">
+      <h5><code>Tcp.Close()</code></h5>
+      <p><strong>Return:</strong> none</p>
+    </div>
+
+    <h4 class="mt-4">Rfid</h4>
+
+    <p>The reader's <strong>Method</strong> is chosen on the Configuration page, and decides both where card reads
+      come from and what "connected" means:</p>
+    <ul>
+      <li><strong>TCP JSON payload</strong> &mdash; the gateway connects to a TCP server that sends one JSON object
+        per read and takes the value from <code>data.Raw</code>. Connected = that session is up.</li>
+      <li><strong>ZK protocol</strong> &mdash; a ZKTeco controller over PullSDK, with its own heartbeat and
+        auto-reconnect. Connected = that controller link. Cards also reach scripts through
+        <code>require("zk_controller")</code> below.</li>
+      <li><strong>Card Reader Client API</strong> &mdash; readers POST to <code>/api/card/input</code>, so there is
+        no outbound connection; connected = the reader answers a ping. Cards arrive via <code>Card.*</code>.</li>
+    </ul>
+
+    <div class="api-doc-block">
+      <h5><code>Rfid.IsConnected()</code></h5>
+      <p>Reports the current state of whichever method is configured. The gateway owns the connection and its
+        retry loop independently of the script &mdash; this only reports state, it doesn't connect or disconnect
+        anything.</p>
+      <p><strong>Return:</strong> <code>bool</code></p>
+      <p><strong>Example:</strong></p>
+      <pre>if Rfid.IsConnected() then
+  Log.Info("RFID Connected")
+else
+  Log.Error("RFID Disconnected")
+end</pre>
+    </div>
+
+    <h4 class="mt-4">Modbus</h4>
+
+    <div class="api-doc-block">
+      <h5><code>Modbus.IsConnected()</code></h5>
+      <p>Reports whether the gateway currently has a live Modbus TCP connection to the PLC. Doesn't attempt to
+        connect or reconnect itself &mdash; the gateway manages that connection independently of the script.</p>
+      <p><strong>Return:</strong> <code>bool</code></p>
+      <p><strong>Example:</strong></p>
+      <pre>if Modbus.IsConnected() then
+  Log.Info("PLC Connected")
+else
+  Log.Error("PLC Disconnected")
+end</pre>
+    </div>
+
+    <div class="api-doc-block">
+      <h5><code>Modbus.CheckConnect(ip, port)</code></h5>
+      <p>One-shot connectivity check against a PLC at an explicit IP/port &mdash; opens a temporary connection,
+        tests it, then closes it again. Independent of the gateway's own configured PLC connection, so it can be
+        used to probe a different PLC without touching the live connection Modbus.IsConnected() reports on.</p>
+      <p><strong>Parameters:</strong> <code>ip</code> (string), <code>port</code> (integer)</p>
+      <p><strong>Return:</strong> <code>ok</code> (boolean)</p>
+      <p><strong>Example:</strong></p>
+      <pre>if Modbus.CheckConnect("192.168.2.203", 502) then
+  Log.Info("PLC reachable")
+else
+  Log.Error("PLC not reachable")
+end</pre>
+    </div>
+
+    <div class="api-doc-block">
+      <h5><code>Modbus.ReadCoil(address)</code></h5>
+      <p><strong>Parameters:</strong> <code>address</code></p>
+      <p><strong>Return:</strong> <code>bool</code> (or <code>nil</code> on error)</p>
+      <p><strong>Example:</strong></p>
+      <pre>state = Modbus.ReadCoil(10)</pre>
+    </div>
+    <div class="api-doc-block">
+      <h5><code>Modbus.ReadCoil(ip, port, address)</code></h5>
+      <p>Ad-hoc form: opens a one-shot connection to a PLC at an explicit IP/port, reads a single coil, then closes
+        the connection &mdash; same pattern as <code>Modbus.CheckConnect</code>, instead of using the gateway's
+        configured PLC connection.</p>
+      <p><strong>Parameters:</strong> <code>ip</code> (string), <code>port</code> (integer), <code>address</code>
+        (integer)</p>
+      <p><strong>Return:</strong> <code>bool</code> (or <code>nil</code> on error)</p>
+      <p><strong>Example:</strong></p>
+      <pre>local coils = {}
+for i = 0, 3 do
+  coils[i] = Modbus.ReadCoil("192.168.2.203", 502, 1280 + i)
+end</pre>
+    </div>
+    <div class="api-doc-block">
+      <h5><code>Modbus.WriteCoil(address, value)</code></h5>
+      <p><strong>Parameters:</strong> <code>address</code>, <code>value</code> (boolean)</p>
+      <p><strong>Return:</strong> <code>ok</code> (boolean)</p>
+    </div>
+    <div class="api-doc-block">
+      <h5><code>Modbus.WriteCoil(ip, port, address, value)</code></h5>
+      <p>Ad-hoc form: opens a one-shot connection to a PLC at an explicit IP/port, writes a single coil, then closes
+        the connection.</p>
+      <p><strong>Parameters:</strong> <code>ip</code> (string), <code>port</code> (integer), <code>address</code>
+        (integer), <code>value</code> (boolean)</p>
+      <p><strong>Return:</strong> <code>ok</code> (boolean)</p>
+      <p><strong>Example:</strong></p>
+      <pre>Modbus.WriteCoil("192.168.2.203", 502, 1280, true)</pre>
+    </div>
+    <div class="api-doc-block">
+      <h5><code>Modbus.ReadCoils(address, count)</code></h5>
+      <p><strong>Return:</strong> table of booleans (1-indexed), or <code>nil</code> on error</p>
+    </div>
+    <div class="api-doc-block">
+      <h5><code>Modbus.WriteCoils(address, values)</code></h5>
+      <p><strong>Parameters:</strong> <code>values</code> (table of booleans)</p>
+      <p><strong>Return:</strong> <code>ok</code> (boolean)</p>
+    </div>
+    <div class="api-doc-block">
+      <h5><code>Modbus.ReadHolding(address)</code></h5>
+      <p><strong>Return:</strong> integer (or <code>nil</code> on error)</p>
+    </div>
+    <div class="api-doc-block">
+      <h5><code>Modbus.WriteHolding(address, value)</code></h5>
+      <p><strong>Return:</strong> <code>ok</code> (boolean)</p>
+    </div>
+    <div class="api-doc-block">
+      <h5><code>Modbus.ReadHoldingRegisters(address, count)</code></h5>
+      <p><strong>Return:</strong> table of integers, or <code>nil</code> on error</p>
+    </div>
+    <div class="api-doc-block">
+      <h5><code>Modbus.WriteHoldingRegisters(address, values)</code></h5>
+      <p><strong>Parameters:</strong> <code>values</code> (table of integers)</p>
+      <p><strong>Return:</strong> <code>ok</code> (boolean)</p>
+    </div>
+
+    <div class="api-doc-block">
+      <h5><code>Modbus.ReadDiscreteInput(address)</code> / <code>Modbus.ReadDiscreteInput(ip, port, address)</code></h5>
+      <p class="text-muted"><strong>Alias:</strong> <code>Modbus.ReadDiscInput(...)</code> &mdash; identical
+        function, for the shorter spelling most PLC tooling uses.</p>
+      <p>Reads a <strong>discrete input</strong> (function code <code>0x02</code>). This is a different, read-only
+        address space from coils &mdash; most PLCs map their physical input terminals here, and answer a
+        <code>Modbus.ReadCoil</code> of the same address with an exception or with unrelated data. If an input
+        reads as <code>nil</code> or is stuck, this is usually the reason.</p>
+      <p>One argument uses the gateway's configured PLC connection; three open a one-shot connection to an explicit
+        address, same as <code>Modbus.ReadCoil</code>.</p>
+      <p><strong>Return:</strong> <code>bool</code>, or <code>nil</code> on error</p>
+      <p><strong>Example:</strong></p>
+      <pre>-- sensor wired to a physical input terminal
+if Modbus.ReadDiscInput(1024) then
+  Log.Info("card taken")
+end</pre>
+    </div>
+    <div class="api-doc-block">
+      <h5><code>Modbus.ReadDiscreteInputs(address, count)</code></h5>
+      <p class="text-muted"><strong>Alias:</strong> <code>Modbus.ReadDiscInputs(address, count)</code></p>
+      <p>Block read of consecutive discrete inputs from the configured PLC connection.</p>
+      <p><strong>Return:</strong> table of booleans, or <code>nil</code> on error</p>
+    </div>
+
+    <div class="api-doc-block">
+      <h5>When a read returns <code>nil</code></h5>
+      <p>A <code>nil</code> return means the read failed, not that the value is off. The reason is written to the
+        Modbus log &mdash; the common ones being:</p>
+      <ul>
+        <li><code>Modbus exception 0x2 (illegal data address)</code> &mdash; the PLC answered, but has nothing at
+          that address. The link is healthy; the address is wrong. Vendors base their I/O at wildly different
+          offsets (0, 1, 1024, 8192, 10000&hellip;), so check the vendor's address map, or run
+          <code>io_test.lua</code>, which scans common bases and reports which ones this PLC accepts.</li>
+        <li><code>Modbus exception 0x1 (illegal function)</code> &mdash; the PLC does not implement that function
+          code at all; e.g. it has no discrete-input space and maps everything to coils.</li>
+        <li><code>no response (timeout)</code> / <code>send failed</code> &mdash; a genuine transport problem.
+          Three of these in a row mark the PLC disconnected so auto-reconnect takes over. Exceptions do
+          <em>not</em> count toward that, since a device that answers is plainly alive.</li>
+      </ul>
+    </div>
+
+    <div class="api-doc-block">
+      <h5><code>Modbus.RegisterInput(name, address [, source])</code> /
+        <code>Modbus.RegisterOutput(name, address)</code></h5>
+      <p>Attaches a display name to a coil so the Dashboard's <strong>PLC Input</strong> / <strong>PLC Output</strong>
+        panels can show labelled I/O instead of bare addresses. Declaration only &mdash; these do not read or write
+        anything; the gateway polls the registered addresses itself and pushes the values over the WebSocket.</p>
+      <p>Registered outputs also become manually testable from the Dashboard (Admin only). The toggle resolves the
+        coil <em>by name</em> through this registry, so only points a script deliberately registered can be driven.
+        Outputs are always coils (FC01) &mdash; there is no writable discrete-input space.</p>
+
+      <p><strong>Parameters:</strong> <code>name</code> (string), <code>address</code> (integer coil address),
+        <code>source</code> (optional string, inputs only)</p>
+
+      <p class="mb-1"><strong><code>source</code></strong> selects the address space an input is read from:</p>
+      <ul>
+        <li><code>"auto"</code> (default) &mdash; try discrete inputs (FC02), fall back to coils (FC01) if the PLC
+          <em>rejects</em> FC02. The point latches onto whichever answered.</li>
+        <li><code>"discrete"</code> (or <code>"fc02"</code>) &mdash; always FC02.</li>
+        <li><code>"coil"</code> (or <code>"fc01"</code>) &mdash; always FC01.</li>
+      </ul>
+      <div class="alert alert-warning">
+        <strong>If a PLC input never changes, this is almost always why.</strong> Coils and discrete inputs are
+        separate address spaces, and many PLCs answer <em>both</em> function codes at the same address while only
+        one carries the live state &mdash; the other returns a constant. Because both replies are valid,
+        <code>"auto"</code> cannot detect the difference: it picks FC02 and the dashboard row sits at
+        <code>OFF</code> forever. Each input row on the Dashboard shows the function code that produced its value
+        (<code>FC01</code> / <code>FC02</code>); if that row is frozen, register it with the other space. The
+        <code>io_test.lua</code> script registers both spaces side by side to make the comparison directly.
+      </div>
+
+      <p><strong>Return:</strong> none. An unrecognised <code>source</code> raises an error rather than silently
+        polling the wrong space.</p>
+      <p class="text-muted">Registrations belong to the runtime that made them: re-running or stopping a script
+        clears <em>its</em> points and leaves every other running script's alone. Call these at the top level of a
+        module that gets loaded on every run. Re-registering an existing name updates its address rather than adding
+        a duplicate.</p>
+      <p><strong>Example:</strong></p>
+      <pre>Modbus.RegisterInput("Card Taken", 1024, "coil")      -- FC01
+Modbus.RegisterInput("Door Sensor", 1025, "discrete") -- FC02
+Modbus.RegisterInput("Spare", 1026)                   -- auto
+
+Modbus.RegisterOutput("Card Scan", 1280)
+Modbus.RegisterOutput("Card Out", 1281)</pre>
+    </div>
+
+    <div class="api-doc-block">
+      <h5><code>Modbus.RegisterDiscreteInput(name, address)</code> /
+        <code>Modbus.RegisterCoilInput(name, address)</code></h5>
+      <p>The same registration as <code>Modbus.RegisterInput</code> with the address space spelled out at the call
+        site &mdash; <code>RegisterDiscreteInput</code> is always FC02, <code>RegisterCoilInput</code> always FC01.</p>
+      <p><strong>Prefer these over <code>RegisterInput</code>.</strong> Its default is <code>"auto"</code>, which
+        cannot tell the two spaces apart on a PLC that answers both at one address &mdash; the failure mode described
+        in the warning above. Naming the space is a decision the PLC's own I/O map already contains; leaving it to be
+        probed is how a dashboard row ends up frozen.</p>
+      <p><strong>Return:</strong> none.</p>
+      <p><strong>Example:</strong></p>
+      <pre>Modbus.RegisterDiscreteInput("CardTaken", 1024)
+Modbus.RegisterDiscreteInput("CardError", 1025)</pre>
+    </div>
+
+    <div class="api-doc-block">
+      <h5><code>Modbus.RegisterRegister(name, address, opts)</code></h5>
+      <p>Declares a named, <em>typed</em> value living in a run of 16-bit registers, shown on the Dashboard's
+        <strong>PLC Registers</strong> card. Modbus itself moves 16-bit words and nothing else &mdash; anything
+        wider is a convention between the PLC program and whoever reads it, so every point states its type
+        <em>and</em> its byte/word order explicitly.</p>
+
+      <p class="mb-1"><strong><code>opts</code> fields</strong> (all optional except where noted):</p>
+      <ul>
+        <li><code>type</code> &mdash; <code>"uint16"</code>, <code>"int16"</code>, <code>"uint32"</code>,
+          <code>"int32"</code>, <code>"uint64"</code>, <code>"int64"</code>, <code>"float32"</code>,
+          <code>"float64"</code>, <code>"string"</code>. Default <code>"uint16"</code>. Common aliases
+          (<code>word</code>, <code>dword</code>, <code>real</code>, <code>dint</code>&hellip;) are accepted.</li>
+        <li><code>endian</code> &mdash; <code>"ABCD"</code> (default), <code>"BADC"</code>, <code>"CDAB"</code>,
+          <code>"DCBA"</code>; <code>"big"</code>/<code>"little"</code> also work. See the table below.</li>
+        <li><code>length</code> &mdash; <strong>required for <code>"string"</code></strong>, in BYTES (two per
+          register).</li>
+        <li><code>source</code> &mdash; <code>"holding"</code> (FC03, default) or <code>"input"</code> (FC04).</li>
+        <li><code>write</code> &mdash; <code>true</code> to allow writing. Holding registers only.</li>
+        <li><code>unit</code> &mdash; display-only label, e.g. <code>"degC"</code>.</li>
+      </ul>
+
+      <p class="mb-1"><strong>Byte and word order.</strong> For the 32-bit value <code>0x12345678</code>
+        across two registers:</p>
+      <div class="table-responsive">
+        <table class="table table-sm">
+          <thead><tr><th>endian</th><th>Register 0</th><th>Register 1</th><th>Also called</th></tr></thead>
+          <tbody>
+            <tr><td><code>ABCD</code></td><td><code>0x1234</code></td><td><code>0x5678</code></td>
+              <td>big endian</td></tr>
+            <tr><td><code>BADC</code></td><td><code>0x3412</code></td><td><code>0x7856</code></td>
+              <td>byte swap</td></tr>
+            <tr><td><code>CDAB</code></td><td><code>0x5678</code></td><td><code>0x1234</code></td>
+              <td>word swap / mid-little</td></tr>
+            <tr><td><code>DCBA</code></td><td><code>0x7856</code></td><td><code>0x3412</code></td>
+              <td>little endian</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="text-muted">A float that reads as a wild number (<code>2.7e+23</code>) or a near-zero
+        (<code>1.4e-45</code>) is almost always the wrong order, not bad data. The dashboard shows the underlying
+        words in a <strong>Raw</strong> column next to each value precisely so you can compare against this table.
+        Registering the same address twice under two orders shows both side by side.</p>
+
+      <div class="alert alert-warning">
+        <strong>FC03 vs FC04.</strong> Holding registers (FC03) are the read/<em>write</em> space, written with
+        FC06 (single) or FC16 (multiple). Input registers (FC04) are <strong>read-only &mdash; Modbus defines no
+        FC04 write frame at all</strong>, because that space models values the device produces. Passing
+        <code>write = true</code> together with <code>source = "input"</code> raises an error at registration
+        rather than failing later at the first write attempt.
+      </div>
+
+      <p><strong>Return:</strong> none. An unknown type, endian or source raises an error.</p>
+      <p><strong>Example:</strong></p>
+      <pre>Modbus.RegisterRegister("Temperature", 4096,
+    { type = "float32", endian = "CDAB", write = true, unit = "degC" })
+
+Modbus.RegisterRegister("Device Tag", 4100,
+    { type = "string", length = 16 })
+
+Modbus.RegisterRegister("Live Current", 3000,
+    { type = "float32", source = "input", unit = "A" })   -- FC04, read-only</pre>
+      <p class="text-muted">See <code>config/scripts/register_test.lua</code> for one point per type.</p>
+    </div>
+
+    <div class="api-doc-block">
+      <h5><code>Modbus.GetRegister(name)</code> / <code>Modbus.SetRegister(name, value)</code></h5>
+      <p>Read and write a registered register point using its declared type and byte order, so a script never
+        re-implements the word packing.</p>
+      <p><code>GetRegister</code> returns the last polled value, or <code>nil, error</code>.
+        <code>SetRegister</code> returns <code>true</code>, or <code>false, error</code>. Values that do not fit
+        the target type are refused rather than truncated &mdash; a wrapped setpoint written to a machine is worse
+        than a refused one.</p>
+      <p><strong>Example:</strong></p>
+      <pre>local temp, err = Modbus.GetRegister("Temperature")
+if temp then Log.Info("temp = " .. temp) else Log.Warning(err) end
+
+local ok, err = Modbus.SetRegister("Setpoint", -120)
+if not ok then Log.Warning("write refused: " .. err) end   -- e.g. "value 70000 does not fit uint16"</pre>
+    </div>
+
+    <div class="api-doc-block">
+      <h5><code>Modbus.ReadInputRegister(address)</code> /
+        <code>Modbus.ReadInputRegisters(address, count)</code></h5>
+      <p>Raw function-code 0x04 reads, returning undecoded 16-bit words (a single integer, or a table of them).
+        Input registers are the read-only counterpart to holding registers &mdash; there is no write equivalent.
+        Use <code>Modbus.RegisterRegister</code> above when you want a typed value instead of raw words.</p>
+      <p><strong>Return:</strong> integer / table of integers, or <code>nil</code> on failure.</p>
+      <p><strong>Example:</strong></p>
+      <pre>local words = Modbus.ReadInputRegisters(3000, 2)
+if words then Log.Info(string.format("%04X %04X", words[1], words[2])) end</pre>
+    </div>
+
+    <h4 class="mt-4">Card</h4>
+
+    <p>Reads card UIDs submitted by external card reader clients over
+      <code>POST /api/card/input</code> (see the Card Clients page and
+      <code>request/Request/cardInputRESTAPI.md</code>) &mdash; an alternative to RFID hardware wired directly to
+      this gateway. A single most-recent card is held in the cache until <code>Card.Clear()</code> is called.</p>
+
+    <div class="api-doc-block">
+      <h5><code>Card.Available()</code></h5>
+      <p>Reports whether a card is currently waiting in the cache.</p>
+      <p><strong>Return:</strong> <code>bool</code></p>
+    </div>
+    <div class="api-doc-block">
+      <h5><code>Card.Get()</code></h5>
+      <p>Reads the cached card without clearing it.</p>
+      <p><strong>Return:</strong> a table &mdash; <code>uid</code> (string), <code>position</code> (integer),
+        <code>timestamp</code> (integer, unix seconds) &mdash; or <code>nil</code> if none is cached.</p>
+      <p><strong>Example:</strong></p>
+      <pre>local timeout, elapsed = 30000, 0
+while elapsed &lt; timeout do
+  if Card.Available() then break end
+  Sleep(100)
+  elapsed = elapsed + 100
+end
+
+if Card.Available() then
+  local card = Card.Get()
+  Log.Info("Card UID: " .. card.uid .. " position " .. card.position)
+  Card.Clear()
+end</pre>
+    </div>
+    <div class="api-doc-block">
+      <h5><code>Card.Clear()</code></h5>
+      <p>Empties the cache. Call this once a cached card has been consumed so the next
+        <code>Card.Available()</code> correctly reports <code>false</code> until a new one arrives.</p>
+      <p><strong>Return:</strong> none</p>
+    </div>
+
+    <h4 class="mt-4">Mq</h4>
+
+    <p>RabbitMQ (AMQP 0-9-1) client &mdash; publish gateway events to a broker and consume commands from it.
+      Configured on the <a href="/config.html">Configuration</a> page under <em>RabbitMQ Broker</em>; nothing
+      here connects on its own, the client runs from gateway startup and reconnects on its own.</p>
+
+    <p>Two things worth knowing before using it:</p>
+    <ul>
+      <li><strong>Publishing is asynchronous.</strong> <code>Mq.Publish()</code> queues the message and returns;
+        the broker gets it from the client's own thread. <code>true</code> means queued, not delivered. Call
+        <code>Mq.Flush()</code> when a script must not move on until the message has actually left.</li>
+      <li><strong>Received messages are acked on arrival</strong>, not when a script reads them, and are held in
+        an inbox of <code>mq.inbox_limit</code> messages (oldest dropped when full). So a slow script loses
+        messages rather than stalling the broker &mdash; and a message read with <code>Mq.Get()</code> is gone
+        from the inbox for every other script.</li>
+    </ul>
+
+    <div class="api-doc-block">
+      <h5><code>Mq.IsConnected()</code></h5>
+      <p>Whether the AMQP connection is up right now.</p>
+      <p><strong>Return:</strong> <code>bool</code></p>
+    </div>
+    <div class="api-doc-block">
+      <h5><code>Mq.Publish(body [, routingKey [, exchange]])</code></h5>
+      <p>Queues one persistent (delivery mode 2) message. Wraps <code>body</code> in the v1 envelope
+        (<code>{"id","ts","v":1,"body"}</code>) when <code>mq.envelope</code> is on.</p>
+      <p><strong>Parameters:</strong> <code>routingKey</code> defaults to <code>mq.routing_key</code>,
+        <code>exchange</code> to <code>mq.exchange</code>.</p>
+      <p><strong>Return:</strong> <code>ok</code> (bool), plus an error string when false &mdash; the broker
+        being disabled, or the outbound queue being full.</p>
+      <p><strong>Example:</strong></p>
+      <pre>local ok, err = Mq.Publish("card issued: " .. cardUid)
+if not ok then
+  Log.Error("Publish failed: " .. tostring(err))
+end</pre>
+    </div>
+    <div class="api-doc-block">
+      <h5><code>Mq.PublishRaw(body [, routingKey [, exchange]])</code></h5>
+      <p>Same, but never wraps: the body goes on the wire exactly as given, whatever
+        <code>mq.envelope</code> says. For talking to a consumer that has its own payload format.</p>
+      <p><strong>Return:</strong> <code>ok</code> (bool) [, error string]</p>
+    </div>
+    <div class="api-doc-block">
+      <h5><code>Mq.Flush([timeoutMs])</code></h5>
+      <p>Waits until the outbound queue is empty. Default timeout 2000&nbsp;ms.</p>
+      <p><strong>Return:</strong> <code>bool</code> &mdash; false means messages are still queued (broker
+        unreachable, or slower than the timeout).</p>
+    </div>
+    <div class="api-doc-block">
+      <h5><code>Mq.Available()</code></h5>
+      <p>Whether at least one received message is waiting.</p>
+      <p><strong>Return:</strong> <code>bool</code></p>
+    </div>
+    <div class="api-doc-block">
+      <h5><code>Mq.Get()</code></h5>
+      <p>Takes the oldest received message out of the inbox.</p>
+      <p><strong>Return:</strong> a table &mdash; <code>body</code> (the envelope's body, or the whole payload
+        when envelopes are off), <code>raw</code> (payload as it arrived), <code>id</code>, <code>ts</code>,
+        <code>v</code>, <code>exchange</code>, <code>routing_key</code>, <code>redelivered</code>,
+        <code>delivery_tag</code> &mdash; or <code>nil</code> when the inbox is empty.</p>
+      <p><strong>Example:</strong></p>
+      <pre>while Mq.Available() do
+  local message = Mq.Get()
+  Log.Info("MQ " .. message.routing_key .. ": " .. message.body)
+end</pre>
+    </div>
+    <div class="api-doc-block">
+      <h5><code>Mq.Clear()</code></h5>
+      <p>Discards every message waiting in the inbox.</p>
+      <p><strong>Return:</strong> none</p>
+    </div>
+    <div class="api-doc-block">
+      <h5><code>Mq.Pause(paused)</code></h5>
+      <p>Cancels the consumer (<code>true</code>) or restarts it (<code>false</code>). Publishing is
+        unaffected. Useful while a script is busy with a card and should not be handed commands.</p>
+      <p><strong>Return:</strong> <code>bool</code> &mdash; whether the request was accepted.</p>
+    </div>
+    <div class="api-doc-block">
+      <h5><code>Mq.Status()</code></h5>
+      <p>Everything the dashboard shows, as one table: <code>enabled</code>, <code>connected</code>,
+        <code>consuming</code>, <code>paused</code>, <code>error</code> (last AMQP/transport error, empty when
+        healthy), the counters <code>published</code>, <code>received</code>, <code>rejected</code> (undecodable
+        or oversized, dropped), <code>dropped</code> (refused because the outbound queue was full),
+        <code>overflowed</code> (evicted from a full inbox), <code>pending</code>, <code>available</code>, and
+        where it points: <code>host</code>, <code>port</code>, <code>vhost</code>, <code>exchange</code>,
+        <code>queue</code>, <code>routing_key</code>. Never the password.</p>
+      <p><strong>Return:</strong> table</p>
+    </div>
+
+    <h4 class="mt-4">zk_controller</h4>
+
+    <p>Native module (not a global table) exposing the ZKTeco access-control controller connection, embedded
+      directly in this process &mdash; see <code>request/HSF_Machine_ZK_Controller_Lua_Integration.md</code> and
+      <code>src/zk_controller/</code>. No separate bridge process. <code>local zk = require("zk_controller")</code>
+      to use it.</p>
+
+    <div class="api-doc-block">
+      <h5><code>zk.connect(ip, port, timeout, password)</code></h5>
+      <p>Synchronous, like a plain TCP connect attempt &mdash; does not retry itself.</p>
+      <p><strong>Parameters:</strong> <code>port</code> default <code>4370</code>, <code>timeout</code> (ms)
+        default <code>2000</code>, <code>password</code> default <code>""</code>.</p>
+      <p><strong>Return:</strong> <code>ok</code> (boolean), <code>err</code> (string, only set when
+        <code>ok</code> is false)</p>
+    </div>
+    <div class="api-doc-block">
+      <h5><code>zk.disconnect()</code></h5>
+      <p><strong>Return:</strong> none</p>
+    </div>
+    <div class="api-doc-block">
+      <h5><code>zk.isConnected()</code></h5>
+      <p><strong>Return:</strong> <code>bool</code></p>
+    </div>
+    <div class="api-doc-block">
+      <h5><code>zk.setAutoReconnect(enable)</code></h5>
+      <p>Default <code>true</code>. Only ever applies after a connection that was up drops (heartbeat failure) &mdash;
+        <code>zk.connect()</code> itself never retries.</p>
+      <p><strong>Return:</strong> none</p>
+    </div>
+    <div class="api-doc-block">
+      <h5><code>zk.startRTLog()</code> / <code>zk.stopRTLog()</code></h5>
+      <p>Starts/stops the 500ms <code>GetRTLog()</code> poll that feeds <code>zk.onCard()</code>/
+        <code>zk.onRawRTLog()</code> below. No effect until connected.</p>
+      <p><strong>Return:</strong> none</p>
+    </div>
+    <div class="api-doc-block">
+      <h5><code>zk.onCard(function(event) ... end)</code></h5>
+      <p>Registers the card-event callback (replaces any previously registered one). Fired for each real card
+        swipe RTLog reports &mdash; door/alarm/password-fail records (which come through with <code>CardData ==
+        "0"</code>) are filtered out first, same as the reference GUI app.</p>
+      <p><strong>event fields:</strong> <code>CardData</code> (string), <code>DoorID</code> (integer),
+        <code>ReaderID</code> (integer &mdash; which of the door's two readers produced the swipe:
+        <code>0</code>=entry, <code>1</code>=exit, <code>2</code>=none, per the SDK's GetRTLog buffer format),
+        <code>InOutStatus</code> (integer &mdash; the same value under its raw RTLog field name),
+        <code>VerifyMode</code> (integer), <code>EventType</code>
+        (integer), <code>Timestamp</code> (integer, unix seconds, best-effort parse of RTLog's time string).</p>
+      <p><strong>Example:</strong></p>
+      <pre>zk.onCard(function(event)
+  Log.Info("Card " .. event.CardData .. " door " .. event.DoorID)
+end)</pre>
+    </div>
+    <div class="api-doc-block">
+      <h5><code>zk.onRawRTLog(function(raw) ... end)</code></h5>
+      <p>Debug callback: fired with the unfiltered <code>GetRTLog()</code> buffer on every non-empty poll,
+        including door/alarm status and the "0"-card noise <code>zk.onCard()</code> filters out. Useful for
+        confirming what the real controller actually sends before trusting any field mapping.</p>
+    </div>
+    <div class="api-doc-block">
+      <h5><code>zk.onConnectionChanged(function(connected) ... end)</code></h5>
+      <p>Fired only when the connection state actually changes (deduplicated, same guard as the original
+        AppState) &mdash; never fires twice in a row with the same value.</p>
+    </div>
+    <div class="api-doc-block">
+      <h5><code>zk.onAuxInput(function(input, shorted) ... end)</code></h5>
+      <p>Fired when an auxiliary input changes: RTLog event <code>221</code> (shorted) or <code>220</code>
+        (disconnected). <strong>This is the only way to read an input</strong> &mdash; the PullSDK has no
+        read-input call, so an input nobody has triggered since start-up has no state at all.</p>
+      <p><strong>Parameters of the callback:</strong> <code>input</code> (integer, the input number),
+        <code>shorted</code> (boolean).</p>
+    </div>
+    <div class="api-doc-block">
+      <h5><code>zk.lastError()</code></h5>
+      <p><strong>Return:</strong> string description of the last native PullSDK failure (connect/heartbeat/
+        reconnect), or an empty string if none yet.</p>
+    </div>
+
+    <p class="mt-3 mb-2"><strong>Outputs: relays and auxiliary outputs.</strong> These wrap
+      <code>ControlDevice</code> (SDK section 3.5). Two facts of the protocol shape all of them: outputs are
+      <em>write-only</em> (nothing can ask a relay what it is doing), and the SDK's hold time is in
+      <em>whole seconds</em> &mdash; <code>0</code> releases now, <code>1</code>-<code>60</code> holds for that
+      many seconds, <code>255</code> latches until something releases it. Sub-second control is therefore
+      latch-then-release, which is what <code>zk.pulse()</code> does for you.</p>
+
+    <div class="api-doc-block">
+      <h5><code>zk.openDoor(door [, seconds])</code></h5>
+      <p>Closes a door relay. <code>seconds</code> default <code>5</code>.</p>
+      <p><strong>Return:</strong> <code>true</code>, or <code>nil</code> plus the reason.</p>
+    </div>
+    <div class="api-doc-block">
+      <h5><code>zk.auxOut(output [, seconds])</code></h5>
+      <p>Same for an auxiliary output. <code>seconds</code> default <code>1</code>.</p>
+    </div>
+    <div class="api-doc-block">
+      <h5><code>zk.pulse(number [, durationMs] [, auxiliary])</code></h5>
+      <p>Latches the output, waits <code>durationMs</code> (default 150), releases it. <code>auxiliary</code>
+        defaults to <code>true</code>. <strong>Blocks</strong> for the duration on the calling script's thread,
+        and costs two round trips to the panel.</p>
+    </div>
+    <div class="api-doc-block">
+      <h5><code>zk.beep(number [, count] [, durationMs] [, gapMs] [, auxiliary])</code></h5>
+      <p><strong>There is no beeper command in the PullSDK</strong> &mdash; nothing in
+        <code>plcommpro.dll</code> addresses the reader's own sounder, and no device parameter configures it.
+        This pulses the named output <code>count</code> times, so what it sounds like depends on what is wired
+        to that relay.</p>
+      <p><strong>Example:</strong></p>
+      <pre>zk.beep(1, 5, 120, 120)   -- five short beeps on auxiliary output 1</pre>
+    </div>
+    <div class="api-doc-block">
+      <h5><code>zk.controlDevice(operationId, p1, p2, p3, p4 [, options])</code></h5>
+      <p>The raw call, for an operation the wrappers do not cover. <code>1</code> = output
+        (<code>p1</code> door/aux number, <code>p2</code> <code>1</code>=door <code>2</code>=aux,
+        <code>p3</code> hold), <code>2</code> = cancel alarm, <code>3</code> = restart,
+        <code>4</code> = enable/disable normal-open.</p>
+    </div>
+    <div class="api-doc-block">
+      <h5><code>zk.cancelAlarm()</code> / <code>zk.restartDevice()</code> /
+        <code>zk.setNormallyOpen(door, enable)</code></h5>
+      <p><strong>Return:</strong> <code>true</code>, or <code>nil</code> plus the reason.</p>
+    </div>
+
+    <div class="api-doc-block">
+      <h5><code>zk.getParam(items)</code> / <code>zk.setParam(itemValues)</code></h5>
+      <p><code>GetDeviceParam</code> / <code>SetDeviceParam</code>. <code>items</code> is comma separated
+        (<code>"LockCount,AuxOutCount,AuxInCount,ReaderCount"</code>); <code>itemValues</code> is
+        <code>"Field=Value,Field=Value"</code>. Values come back as strings &mdash; the parameter space mixes
+        numbers, IP addresses and bit masks.</p>
+      <p><strong>Return:</strong> table of <code>name = value</code>, or <code>nil</code> plus the reason.</p>
+    </div>
+    <div class="api-doc-block">
+      <h5><code>zk.ioState()</code></h5>
+      <p>Everything the controller has reported about its own I/O: <code>doors</code> (array of
+        <code>"OPEN"</code> / <code>"CLOSED"</code> / <code>"NO_SENSOR"</code>), <code>door_bytes</code>,
+        <code>alarms</code>, <code>status_seen</code>, <code>status_time</code>, <code>inputs</code>
+        (map of input number to boolean), <code>input_seen</code>, and <code>counts</code>
+        (<code>locks</code>, <code>aux_out</code>, <code>aux_in</code>, <code>readers</code>).</p>
+      <p>Door state arrives only in RTLog status records, which the panel sends when it has no events queued
+        &mdash; so <code>status_seen</code> false means "not told yet", not "all closed".</p>
+    </div>
+    <div class="api-doc-block">
+      <h5><code>zk.doorState(door)</code> / <code>zk.inputState(input)</code></h5>
+      <p><strong>Return:</strong> <code>"OPEN"</code>/<code>"CLOSED"</code>/<code>"NO_SENSOR"</code>, and
+        <code>true</code> (shorted) / <code>false</code> (open) respectively. Both answer <code>nil</code> when
+        the panel has not reported that door or input yet &mdash; never a guess.</p>
+    </div>
+
+    <h4 class="mt-4">Db</h4>
+
+    <p>SQLite for a script's own data. One connection per script, opened with <code>Db.Open</code>; the file is
+      opened in WAL mode, so another process (or the gateway's own locker UI) can read it while this script
+      writes. A relative path resolves against the gateway's <strong>config directory</strong>, beside
+      <code>config.db</code> and <code>logs.db</code>.</p>
+
+    <p class="mb-2"><strong>Values are always bound, never pasted into the SQL.</strong> Every function takes an
+      optional array of parameters for the <code>?</code> placeholders. A statement whose parameter count does not
+      match is refused rather than run &mdash; an unbound <code>?</code> would silently become NULL and match
+      nothing.</p>
+
+    <div class="api-doc-block">
+      <h5><code>Db.Open(path)</code></h5>
+      <p><strong>Return:</strong> <code>true</code>, or <code>nil</code> plus the reason. Creates the file and any
+        missing parent directory. Calling it again closes the previous connection.</p>
+      <pre>local ok, err = Db.Open("smartlocker.db")
+Db.Exec([[CREATE TABLE IF NOT EXISTS visits (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, card TEXT, at TEXT)]])</pre>
+    </div>
+    <div class="api-doc-block">
+      <h5><code>Db.Exec(sql [, params])</code></h5>
+      <p>For statements that return no rows. <code>Db.Execute</code> is an alias.</p>
+      <p><strong>Return:</strong> <code>changes</code> (integer), <code>last_insert_id</code> (integer), or
+        <code>nil</code> plus the error message.</p>
+      <pre>local changes, id = Db.Exec("INSERT INTO visits(card, at) VALUES(?, ?)", { uid, os.date("%F %T") })</pre>
+    </div>
+    <div class="api-doc-block">
+      <h5><code>Db.Query(sql [, params])</code></h5>
+      <p><strong>Return:</strong> array of row tables, or <code>nil</code> plus the error. A column that is SQL
+        NULL is simply absent from the row table.</p>
+      <pre>for _, row in ipairs(Db.Query("SELECT card, at FROM visits WHERE at &gt; ?", { since }) or {}) do
+  Log.Info(row.card .. " at " .. row.at)
+end</pre>
+    </div>
+    <div class="api-doc-block">
+      <h5><code>Db.QueryOne(sql [, params])</code> / <code>Db.Scalar(sql [, params])</code></h5>
+      <p>The first row, and the first column of the first row. Both return <code>nil</code> with no second value
+        when there is no such row (a normal answer), and <code>nil</code> plus a message when the statement
+        failed.</p>
+    </div>
+    <div class="api-doc-block">
+      <h5><code>Db.Begin()</code> / <code>Db.Commit()</code> / <code>Db.Rollback()</code> /
+        <code>Db.InTransaction()</code></h5>
+      <p><code>BEGIN IMMEDIATE</code>, so two writers fail fast at the start rather than at commit. Nested
+        <code>Db.Begin()</code> increments a depth counter and issues no SQL; a <code>Db.Rollback()</code> at any
+        depth unwinds everything. <code>Db.InTransaction()</code> returns the depth.</p>
+    </div>
+    <div class="api-doc-block">
+      <h5><code>Db.NULL</code></h5>
+      <p>Binds SQL NULL. A Lua <code>nil</code> cannot: <code>{1, nil, 3}</code> is a one-element array as far as
+        <code>#</code> is concerned, and the statement would be refused for having too few parameters.</p>
+    </div>
+    <div class="api-doc-block">
+      <h5><code>Db.IsOpen()</code> / <code>Db.Path()</code> / <code>Db.Close()</code> /
+        <code>Db.Quote(text)</code></h5>
+      <p><code>Db.Quote</code> is for identifiers and <code>ORDER BY</code> clauses only &mdash; values go through
+        the parameter array.</p>
+    </div>
+
+    <h4 class="mt-4">Http</h4>
+
+    <p>Lets a script answer HTTP requests. Crow's routing table is built when the gateway starts, so a script
+      cannot add a URL of its own &mdash; instead everything under <code>/api/app/</code> is forwarded to
+      whichever running script registered that path. Up to three path segments below the prefix.</p>
+
+    <p><strong>The handler runs on the script's own thread</strong>, at its next <code>Sleep()</code> &mdash; the
+      only thread allowed to enter that VM. A web client is holding a connection open while it waits (5 second
+      timeout, then 504), so a handler must return promptly and must not block on hardware.</p>
+
+    <div class="api-doc-block">
+      <h5><code>Http.Register(method, path, handler)</code></h5>
+      <p><code>method</code> is <code>"GET"</code>, <code>"POST"</code>, … or <code>"ANY"</code>. A path segment
+        written <code>&lt;name&gt;</code> matches any single segment; the handler reads it back from
+        <code>request.path</code>. Registering the same method and path again replaces the handler.</p>
+      <p><strong>The handler receives</strong> one table: <code>method</code>, <code>path</code> (below the
+        prefix), <code>body</code>, <code>content_type</code>, <code>query</code> (table),
+        <code>headers</code> (Content-Type, API-Key, Accept, X-Requested-With).</p>
+      <p><strong>The handler returns</strong> either <code>status, body [, content_type]</code>, or a single
+        string body (200), or nothing (204).</p>
+      <pre>Http.Register("GET", "lockers", function(request)
+  return 200, Json.encode(snapshot()), "application/json"
+end)
+
+Http.Register("POST", "lockers/&lt;id&gt;/unlock", function(request)
+  local id = tonumber(request.path:match("lockers/(%d+)"))
+  return unlock(id)
+end)</pre>
+    </div>
+    <div class="api-doc-block">
+      <h5><code>Http.Unregister(method, path)</code> / <code>Http.Routes()</code></h5>
+      <p><code>Http.Routes()</code> returns this script's routes as <code>"METHOD path"</code> strings.
+        <code>GET /api/app</code> on the gateway lists what every running script serves.</p>
+    </div>
+
+    <h4 class="mt-4">Runtime Variables</h4>
+
+    <div class="api-doc-block">
+      <h5><code>SetVariable(name, value)</code></h5>
+      <p>Publishes a runtime variable visible on the Dashboard. <code>value</code> may be boolean, integer, float, or string.</p>
+      <p><strong>Example:</strong></p>
+      <pre>SetVariable("DoorState", true)</pre>
+    </div>
+    <div class="api-doc-block">
+      <h5><code>GetVariable(name)</code></h5>
+      <p><strong>Return:</strong> the stored value, or <code>nil</code> if unset.</p>
+    </div>
+
+    <h4 class="mt-4">Event Handlers</h4>
+
+    <p>Define any of these as global functions and the gateway calls them when the matching hardware event
+      occurs &mdash; you don't call them yourself.</p>
+
+    <div class="api-doc-block">
+      <h5><code>OnCitizenCardRead(cardJson)</code></h5>
+      <p>Fired when the Citizen ID reader (Serial) produces a line that parses as a card. <code>cardJson</code>
+        is the parsed fields as a JSON string (see the Citizen ID Card Format section).</p>
+    </div>
+    <div class="api-doc-block">
+      <h5><code>OnRfidCardRead(uid)</code></h5>
+      <p>Fired when the RFID reader reports a card UID. <code>uid</code> is that UID as a string.</p>
+    </div>
+    <div class="api-doc-block">
+      <h5><code>OnPlcInputChanged(index, value)</code></h5>
+      <p>Fired when a PLC input coil's value changes.</p>
+    </div>
+    <div class="api-doc-block">
+      <h5><code>OnCardReceived(uid)</code></h5>
+      <p>Fired when a card reader client posts to <code>POST /api/card/input</code>. Complements
+        <code>Card.Available()</code>/<code>Card.Get()</code> for scripts that prefer an event handler over
+        polling &mdash; the card is cached either way, so both styles can read it via <code>Card.Get()</code>.</p>
+    </div>
+
+    <div class="api-doc-block">
+      <h5><code>OnMqMessage(body)</code></h5>
+      <p>Fired when the RabbitMQ client accepts a message. <code>body</code> is the same string
+        <code>Mq.Get().body</code> would return. A wake-up only: the message is already in the inbox and already
+        acked, so a handler that wants the routing key or envelope id calls <code>Mq.Get()</code> for the full
+        table &mdash; and with several scripts running, whichever one calls <code>Mq.Get()</code> first takes it.</p>
+    </div>
+
+    <p class="text-muted"><code>zk_controller</code> (above) uses callback registration
+      (<code>zk.onCard(function(event) ... end)</code>) instead of this named-global-function convention &mdash;
+      see its own section for why (it's a <code>require()</code>'d module, not global bindings).</p>
+
+    <p class="text-muted">Delivery timing depends on how the script is structured. A script that just defines
+      handlers and returns (the convention above assumes this) gets them called immediately, as soon as the
+      event occurs. A script that instead polls in its own <code>while true do ... end</code> loop (e.g. calling
+      <code>Serial.Read()</code> itself rather than defining <code>OnCitizenCardRead</code>) holds the engine's
+      lock for as long as it runs, so events can't be delivered mid-loop by whatever background thread detected
+      them &mdash; they're queued instead, and delivered the next time that script calls <code>Sleep()</code> or
+      <code>Serial.Read()</code> (both drain the queue first). Mixing styles works fine &mdash; e.g. a script
+      that polls <code>Serial.Read()</code> for citizen cards but still defines <code>OnRfidCardRead</code> for
+      RFID scans &mdash; as long as it calls <code>Sleep()</code> or <code>Serial.Read()</code> regularly so
+      queued events actually get delivered.</p>
+
+    <h4 class="mt-4">Utility</h4>
+
+    <div class="api-doc-block">
+      <h5><code>Sleep(milliseconds)</code></h5>
+      <p>Blocks the script for the given duration &mdash; useful for pacing a
+        <code>Serial.Write</code> followed by a <code>Serial.Read</code>, or a
+        <code>Tcp.Send</code> followed by a <code>Tcp.Receive</code>.</p>
+      <p><strong>Parameters:</strong> <code>milliseconds</code> (number)</p>
+      <p><strong>Return:</strong> none</p>
+      <p><strong>Example:</strong></p>
+      <pre>Serial.Open()
+Serial.Write("PING")
+Sleep(200)
+local line = Serial.Read()</pre>
+      <p class="text-muted">The whole Lua engine runs under a single lock (see
+        the architecture note in <code>CLAUDE.md</code>), so a long
+        <code>Sleep</code> call delays every other script event &mdash;
+        <code>OnCitizenCardRead</code>, <code>OnPlcInputChanged</code>, the
+        Log/Editor endpoints &mdash; until it returns. Fine for a short
+        one-off test run from the Lua Editor; avoid long sleeps inside
+        handlers that fire often.</p>
+    </div>
+
+    <h4 class="mt-4">Log</h4>
+
+    <div class="api-doc-block">
+      <h5><code>Log.Info(message)</code> / <code>Log.Warning(message)</code> / <code>Log.Error(message)</code> / <code>Log.Debug(message)</code></h5>
+      <p>Writes to the gateway's Lua log category &mdash; console, the rotating log file, and the
+        <strong>Runtime Log</strong> tab of the Log Viewer. This is the debugging channel: entries are
+        free-form text, and the in-memory buffer the viewer reads is bounded, so old lines age out.</p>
+      <p>For records that must still be findable next month, use <code>Log.Write</code> below.</p>
+    </div>
+
+    <div class="api-doc-block">
+      <h5><code>Log.Write(log_type, data [, level])</code></h5>
+      <p>Writes a <em>structured</em> log entry into SQLite (<code>config/logs.db</code>), searchable on the
+        <strong>Structured Logs</strong> tab by date range, type, level, script and keyword. This is the channel for
+        business events &mdash; a card issued, a verification result &mdash; as opposed to debugging output.</p>
+      <p><strong>Parameters:</strong> <code>log_type</code> (string, must be a type declared in
+        <code>config/log_definitions.json</code>), <code>data</code> (flat table of <code>field = value</code>),
+        <code>level</code> (optional string, default <code>"INFO"</code>)</p>
+      <p><strong>Return:</strong> <code>true</code> on success; <code>false, message</code> on failure.</p>
+      <p class="mb-1">The gateway validates <code>data</code> against the type's declaration before inserting, and
+        rejects the whole write on:</p>
+      <ul>
+        <li>an unknown <code>log_type</code>;</li>
+        <li>a field the type does not declare (this is what catches a misspelled field name, which would otherwise
+          become an invisible column);</li>
+        <li>a missing field the type marks <code>required</code>;</li>
+        <li>a value that does not parse as the declared type (<code>integer</code>, <code>number</code>,
+          <code>boolean</code>).</li>
+      </ul>
+      <p>Nothing is written on a rejected call &mdash; the entry and its field values go in as one transaction, so a
+        row can never appear with only some of its fields.</p>
+      <p><strong>Example:</strong></p>
+      <pre>local ok, err = Log.Write("card_issue", {
+    citizen_id    = citizen_id,
+    employee_name = card.full_name,
+    card_uid      = card_uid,
+    machine_id    = Config.Get("system.machine_id"),
+    result        = "success"
+})
+if not ok then
+    Log.Error("could not record the issue: " .. tostring(err))
+end</pre>
+      <p class="text-muted">Add or change log types by editing <code>config/log_definitions.json</code>; the gateway
+        loads it at startup. Scripts never create tables or run SQL &mdash; the three-table schema underneath stores
+        arbitrary field sets without one table per log type.</p>
+    </div>
+
+    <div class="api-doc-block">
+      <h5><code>Log.Types()</code></h5>
+      <p>Lists the declared log types, so a script can check what it may write instead of finding out from a rejected
+        <code>Log.Write</code>.</p>
+      <p><strong>Return:</strong> array of tables: <code>type</code> (string), <code>description</code> (string),
+        <code>fields</code> (array of <code>{ name, type, required }</code>)</p>
+    </div>
+
+    <h4 class="mt-4">Config</h4>
+
+    <p>Read/write access to the gateway's own configuration &mdash; the same values the Configuration page edits and
+      <code>PATCH /api/config</code> carries, addressed as <code>"&lt;section&gt;.&lt;key&gt;"</code>. Scripts reach
+      configuration only through these functions; there is deliberately no SQL surface in Lua.</p>
+    <p class="text-muted">Not to be confused with <code>require("config")</code>, the script-level
+      <code>config.lua</code> table of workflow constants. Values that describe the <em>gateway</em> (machine id,
+      PLC address, REST URL) belong here, where the Configuration page can edit them without touching a script.</p>
+
+    <div class="api-doc-block">
+      <h5><code>Config.Get(key)</code></h5>
+      <p><strong>Parameters:</strong> <code>key</code> (string, e.g. <code>"modbus.ip"</code>)</p>
+      <p><strong>Return:</strong> the value as a string, number or boolean; <code>nil, message</code> when there is no
+        such key.</p>
+      <p><strong>Example:</strong></p>
+      <pre>local plc_ip     = Config.Get("modbus.ip")
+local plc_port   = Config.Get("modbus.port")
+local machine_id = Config.Get("system.machine_id")
+local server_url = Config.Get("rest.server_url") -- nil: the key is "rest.url"</pre>
+    </div>
+
+    <div class="api-doc-block">
+      <h5><code>Config.Set(key, value)</code></h5>
+      <p>Sets one value and writes the whole configuration back to SQLite immediately, so the change survives a
+        restart.</p>
+      <p><strong>Return:</strong> <code>true</code>, or <code>false, message</code>.</p>
+      <p>Fails rather than silently doing nothing when the key does not exist, or when the value is a different kind
+        of thing than the field holds (a string where a number belongs). Both would otherwise look like success while
+        the script read back the old value.</p>
+      <p class="text-muted">Sections whose modules re-read their settings each cycle (Modbus, RFID) pick a change up
+        without a restart; others take effect on the next start.</p>
+    </div>
+
+    <div class="api-doc-block">
+      <h5><code>Config.Exists(key)</code></h5>
+      <p><strong>Return:</strong> boolean.</p>
+    </div>
+
+    <div class="api-doc-block">
+      <h5><code>Config.GetCategory(category)</code></h5>
+      <p><strong>Parameters:</strong> <code>category</code> (string, e.g. <code>"modbus"</code>)</p>
+      <p><strong>Return:</strong> a table of that section's keys; <code>nil, message</code> when there is no such
+        section.</p>
+      <p><strong>Example:</strong></p>
+      <pre>local plc = Config.GetCategory("modbus")
+Log.Info("PLC at " .. plc.ip .. ":" .. tostring(plc.port))</pre>
+      <p class="mb-1">Sections: <code>system</code>, <code>web</code>, <code>rest</code>, <code>serial</code>,
+        <code>serial2</code>, <code>modbus</code>, <code>rfid</code>, <code>zk</code>, <code>lua</code>,
+        <code>logging</code>, <code>card_api</code>.</p>
+      <p class="text-muted"><code>config/scripts/config.lua</code> is the worked example: installation-level
+        settings (server URL, API key, PLC and ZK addresses, machine id) come from here, while the machine's
+        mechanical timings, retry limits and coil addresses stay literal in that file. Each lookup carries the
+        value it had before the migration as a fallback, and warns when it uses it — so a database that predates
+        a key still runs unchanged.</p>
+    </div>
+
+    <h4 class="mt-4">Running Several Scripts</h4>
+
+    <p>Scripts run independently: each has its own Lua state, its own thread and its own entry in the
+      <strong>System Info</strong> tab (state, CPU, RAM, core, runtime id). Tick several in the Lua Editor's script
+      tree and press <strong>Run Selected</strong>.</p>
+    <p class="mb-1">What that means when writing one:</p>
+    <ul>
+      <li><strong>Nothing is shared through globals.</strong> Two scripts have two separate global tables; pass data
+        between them with <code>SetVariable</code> / <code>GetVariable</code>, which the whole gateway shares.</li>
+      <li><strong>Every script gets every event.</strong> <code>OnCitizenCardRead</code>,
+        <code>OnRfidCardRead</code>, <code>OnCardReceived</code> and <code>OnPlcInputChanged</code> are delivered to
+        each running script that defines them &mdash; so if two scripts both handle card reads, both will act.</li>
+      <li><strong>A failing script stops alone.</strong> It is marked <code>ERROR</code>, its error is recorded under
+        the <code>script_error</code> log type, and the others keep running.</li>
+      <li><strong>Hardware is shared, and not reserved.</strong> One serial port, one PLC connection. Two scripts
+        writing to the LED display or driving the same coil will interleave; decide which script owns which device.</li>
+      <li><strong>Starting a script that is already running does nothing</strong> &mdash; the UI reports "already
+        running" rather than launching a second copy.</li>
+    </ul>
+
+    <h4 class="mt-4">Error Codes</h4>
+    <p>Native bindings never throw C++ exceptions into Lua. Failures are reported either as a returned <code>nil</code> /
+      <code>false</code> value (see each function's Return above) or, for malformed arguments (wrong type, missing
+      required parameter), as a Lua runtime error catchable with <code>pcall</code> and surfaced in the Lua Editor's
+      Error Console.</p>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="js/layout.js"></script>
+  <script src="js/ws.js"></script>
+  <!-- Update popup: on every page with the shared chrome, so a release that
+       lands while someone is on Logs or Test Tools is still noticed. -->
+  <script src="js/update.js"></script>
+</body>
+</html>

@@ -1,0 +1,36 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Example Driver settings",
+  "description": "The gateway renders its Configuration page from this file. Core never compiles these fields in -- that is what lets a new protocol ship without rebuilding the gateway.",
+  "type": "object",
+  "properties": {
+    "poll_interval_ms": {
+      "type": "integer",
+      "title": "Poll interval (ms)",
+      "minimum": 10,
+      "maximum": 3600000,
+      "default": 1000
+    },
+    "timeout_ms": {
+      "type": "integer",
+      "title": "Response timeout (ms)",
+      "minimum": 1,
+      "default": 1000
+    },
+    "unit_id": {
+      "type": "integer",
+      "title": "Unit / slave address",
+      "minimum": 0,
+      "maximum": 255,
+      "default": 1
+    },
+    "retries": {
+      "type": "integer",
+      "title": "Retries before reporting a failure",
+      "minimum": 0,
+      "maximum": 10,
+      "default": 2
+    }
+  },
+  "required": ["timeout_ms"]
+}

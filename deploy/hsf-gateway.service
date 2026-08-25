@@ -1,0 +1,63 @@
+# systemd unit for an OTA-managed eMaster Gateway install.
+#
+# scripts/install-ota.sh substitutes @ROOT@ and @USER@ and writes this to
+# /etc/systemd/system/hsf-gateway.service. Nothing here is optional decoration:
+# each setting below is what makes UpdateManager's rollback work.
+#
+#   ExecStart      runs through `current`, NOT through releases/<version>.
+#                  Following the symlink at every start is what makes swapping
+#                  it an update, and swapping it back a rollback.
+#
+#   config path    given explicitly, and pointing OUTSIDE the release tree.
+#                  main() derives the log directory, clients.db, logs.db and
+#                  smartlocker.db from this file's directory, so this one
+#                  argument keeps every piece of installation state out of the
+#                  directory the next update replaces wholesale.
+#
+#   Restart=always the gateway exits 75 when it wants to come back up in a new
+#                  release (or in a rolled-back one). It has no way to restart
+#                  itself -- something has to, and that is this line.
+
+[Unit]
+Description=eMaster Smart Gateway
+Documentation=file://@ROOT@/current/docs/ota-update.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=@USER@
+WorkingDirectory=@ROOT@
+ExecStart=@ROOT@/current/bin/hsf_gateway @ROOT@/data/config.db
+
+# Exit 75 (EX_TEMPFAIL) means "installed an update, start me again"; 0 means a
+# clean operator-requested stop. Restart=always covers both, plus a crash --
+# and a crash IS how a bad release gets counted against itself, so this must
+# not be narrowed to on-failure.
+Restart=always
+RestartSec=3
+
+# Enough to ride out a slow PLC or a reader that boots late, not so many that a
+# genuinely broken release restarts forever without anyone noticing.
+StartLimitIntervalSec=300
+StartLimitBurst=10
+
+# The gateway writes releases/, downloads/ and repoints current when it
+# installs an update, so the whole root has to be writable by @USER@. Nothing
+# outside it needs to be.
+ReadWritePaths=@ROOT@
+ProtectSystem=full
+ProtectHome=yes
+NoNewPrivileges=yes
+PrivateTmp=yes
+
+# Serial ports (the citizen ID reader and the LED display). Drop this if the
+# device has neither, or narrow it to the specific device nodes.
+SupplementaryGroups=dialout
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=hsf-gateway
+
+[Install]
+WantedBy=multi-user.target

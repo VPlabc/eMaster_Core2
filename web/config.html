@@ -1,0 +1,512 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>eMaster Gateway - Configuration</title>
+  <!-- Read by auth.js below: a Client typing this URL directly is bounced,
+       not merely denied the nav link. Frontend-only -- the backend does not
+       enforce this yet (updateUI.md section 34). -->
+  <meta name="hsf-require-role" content="admin">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="css/app.css" rel="stylesheet">
+  <!-- Must run before first paint so the stored theme is already on <html>;
+       loading it with the scripts at the end of <body> flashes light-then-dark. -->
+  <script src="js/theme.js"></script>
+  <!-- Gates the page: redirects to /login.html when there is no session, and
+       enforces any hsf-require-role meta above. Must precede layout.js. -->
+  <script src="js/auth.js"></script>
+</head>
+<body>
+  <div id="hsfNav"></div>
+
+  <div class="container py-4">
+    <div id="saveAlert" class="alert d-none" role="alert"></div>
+
+    <form id="configForm">
+      <!-- Identity. Nothing in the C++ reads these; they exist so scripts can
+           ask for Config.Get("system.machine_id") instead of each deployment
+           editing a hard-coded value into its Lua (upgrade.md section 5). -->
+      <div class="card p-3 mb-3">
+        <h5>System</h5>
+        <div class="row g-3">
+          <div class="col-md-4">
+            <label class="form-label">Machine ID</label>
+            <input class="form-control" name="system.machine_id">
+            <div class="form-text">Read from Lua as <code>Config.Get("system.machine_id")</code>.</div>
+          </div>
+          <div class="col-md-8">
+            <label class="form-label">Device Name</label>
+            <input class="form-control" name="system.device_name">
+          </div>
+        </div>
+      </div>
+
+      <div class="card p-3 mb-3">
+        <h5>Lua Startup Script</h5>
+        <p class="text-muted small mb-2">
+          Path to the Lua script started by the gateway. The path is relative to the
+          gateway configuration directory and is saved in the database with the rest
+          of this configuration. Leave it empty to disable the startup script.
+        </p>
+        <div class="input-group">
+          <input class="form-control" name="lua.script_path" placeholder="config/scripts/main.lua">
+          <a class="btn btn-outline-secondary" href="/lua_editor.html">Open Lua scripts</a>
+        </div>
+      </div>
+
+      <div class="card p-3 mb-3">
+        <h5>REST API</h5>
+        <div class="row g-3">
+          <div class="col-md-8"><label class="form-label">URL</label><input class="form-control" name="rest.url"></div>
+          <div class="col-md-4"><label class="form-label">API-Key</label><input class="form-control" name="rest.api_key"></div>
+          <div class="col-md-4"><label class="form-label">Timeout (ms)</label><input type="number" class="form-control" name="rest.timeout_ms"></div>
+          <div class="col-md-4"><label class="form-label">Retry Count</label><input type="number" class="form-control" name="rest.retry_count"></div>
+          <div class="col-md-4 d-flex align-items-end">
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" name="rest.ssl_enable" id="sslEnable">
+              <label class="form-check-label" for="sslEnable">SSL Enable</label>
+            </div>
+          </div>
+        </div>
+        <div class="d-flex align-items-center gap-2 mt-3">
+          <button type="button" id="btnTestRest" class="btn btn-outline-secondary btn-sm">Test Connection</button>
+          <span id="restTestResult" class="small"></span>
+        </div>
+      </div>
+
+      <div class="card p-3 mb-3">
+        <h5>Serial Port</h5>
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label class="form-label">Port Name</label>
+            <div class="input-group">
+              <select class="form-select" name="serial.port" id="serialPortSelect"></select>
+              <button type="button" id="btnScanSerial" class="btn btn-outline-secondary">Scan</button>
+              <button type="button" id="btnTryOpenSerial" class="btn btn-outline-secondary">Try Open</button>
+            </div>
+          </div>
+          <div class="col-md-2"><label class="form-label">Baud Rate</label><input type="number" class="form-control" name="serial.baudrate"></div>
+          <div class="col-md-2"><label class="form-label">Data Bits</label><input type="number" class="form-control" name="serial.data_bits"></div>
+          <div class="col-md-2"><label class="form-label">Stop Bits</label><input type="number" class="form-control" name="serial.stop_bits"></div>
+          <div class="col-md-2">
+            <label class="form-label">Parity</label>
+            <select class="form-select" name="serial.parity">
+              <option value="N">None</option>
+              <option value="E">Even</option>
+              <option value="O">Odd</option>
+            </select>
+          </div>
+        </div>
+        <div class="mt-2">
+          <span id="serialScanResult" class="small"></span>
+          <span id="serialOpenResult" class="small ms-2"></span>
+        </div>
+      </div>
+
+      <div class="card p-3 mb-3">
+        <h5>Serial Port 2 &mdash; LED Display</h5>
+        <p class="text-muted small mb-3">
+          Second, independent serial port driving the TDM-800 LED display (see
+          <code>request/LEDBoard.md</code>). Exposed to Lua as <code>Serial2.*</code> and wrapped by
+          <code>config/scripts/led.lua</code>. Separate from the Citizen ID reader on Serial Port above.
+        </p>
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label class="form-label">Port Name</label>
+            <div class="input-group">
+              <select class="form-select" name="serial2.port" id="serial2PortSelect"></select>
+              <button type="button" id="btnScanSerial2" class="btn btn-outline-secondary">Scan</button>
+              <button type="button" id="btnTryOpenSerial2" class="btn btn-outline-secondary">Try Open</button>
+            </div>
+          </div>
+          <div class="col-md-2"><label class="form-label">Baud Rate</label><input type="number" class="form-control" name="serial2.baudrate"></div>
+          <div class="col-md-2"><label class="form-label">Data Bits</label><input type="number" class="form-control" name="serial2.data_bits"></div>
+          <div class="col-md-2"><label class="form-label">Stop Bits</label><input type="number" class="form-control" name="serial2.stop_bits"></div>
+          <div class="col-md-2">
+            <label class="form-label">Parity</label>
+            <select class="form-select" name="serial2.parity">
+              <option value="N">None</option>
+              <option value="E">Even</option>
+              <option value="O">Odd</option>
+            </select>
+          </div>
+        </div>
+        <div class="mt-2">
+          <span id="serial2ScanResult" class="small"></span>
+          <span id="serial2OpenResult" class="small ms-2"></span>
+        </div>
+
+        <div class="border-top pt-3 mt-3">
+          <label class="form-label">Send test message to the display</label>
+          <div class="input-group" style="max-width: 32rem;">
+            <input id="ledTestText" class="form-control" value="HSF GATEWAY TEST" maxlength="64">
+            <button type="button" id="btnSendLedTest" class="btn btn-outline-secondary">Send</button>
+          </div>
+          <div id="ledTestResult" class="small mt-2"></div>
+          <div class="form-text">
+            Writes a real TDM-800 frame using the settings above &mdash; it does not need a Lua script running.
+            ASCII only; the panel cannot render diacritics.
+          </div>
+        </div>
+      </div>
+
+      <div class="card p-3 mb-3">
+        <h5>Modbus TCP</h5>
+        <p class="text-muted small mb-3">
+          Addresses are no longer configured here &mdash; the running Lua script declares the points it uses with
+          <code>Modbus.RegisterInput(name, address)</code> and <code>Modbus.RegisterOutput(name, address)</code>,
+          and those appear on the Dashboard. Inputs are read as discrete inputs (FC02), outputs as coils (FC01).
+        </p>
+        <div class="row g-3">
+          <div class="col-md-4"><label class="form-label">PLC IP</label><input class="form-control" name="modbus.ip"></div>
+          <div class="col-md-2"><label class="form-label">PLC Port</label><input type="number" class="form-control" name="modbus.port"></div>
+        </div>
+        <div class="d-flex align-items-center gap-2 mt-3">
+          <button type="button" id="btnTestModbus" class="btn btn-outline-secondary btn-sm">Test Connect</button>
+          <span id="modbusTestResult" class="small"></span>
+        </div>
+      </div>
+
+      <div class="card p-3 mb-3">
+        <h5>RFID Reader</h5>
+        <div class="row g-3">
+          <div class="col-md-4">
+            <label class="form-label" for="rfidMode">Method</label>
+            <select class="form-select" name="rfid.mode" id="rfidMode">
+              <option value="tcp_json">TCP JSON payload</option>
+              <option value="zk">ZK protocol (PullSDK)</option>
+              <option value="card_api">Card Reader Client API</option>
+            </select>
+          </div>
+          <div class="col-md-8 d-flex align-items-end">
+            <div class="form-text" id="rfidModeHelp"></div>
+          </div>
+
+          <div class="col-md-4"><label class="form-label" id="rfidIpLabel">IP</label><input class="form-control" name="rfid.ip"></div>
+          <div class="col-md-2"><label class="form-label" id="rfidPortLabel">Port</label><input type="number" class="form-control" name="rfid.port"></div>
+          <div class="col-md-3"><label class="form-label" id="rfidIntervalLabel">Reconnect Interval (ms)</label><input type="number" class="form-control" name="rfid.reconnect_interval_ms"></div>
+          <div class="col-md-3"><label class="form-label">Timeout (ms)</label><input type="number" class="form-control" name="rfid.timeout_ms"></div>
+        </div>
+        <div class="d-flex align-items-center gap-2 mt-3">
+          <button type="button" id="btnTestRfid" class="btn btn-outline-secondary btn-sm">Test</button>
+          <span id="rfidTestResult" class="small"></span>
+        </div>
+      </div>
+
+      <!-- The ZK controller the Lua workflow reads card UIDs from. Separate
+           from the RFID Reader card above because on this machine they are two
+           different devices: nothing forces the ZK controller's address to be
+           whatever `rfid` points at. Read from Lua as Config.Get("zk.ip"). -->
+      <div class="card p-3 mb-3">
+        <h5>ZK Access Controller</h5>
+        <p class="text-muted small mb-2">
+          The card reader at the scan position, driven from Lua with
+          <code>zk.connect()</code>. Nothing in the backend connects to it &mdash; these values are
+          here so <code>config/scripts/zkcard.lua</code> can read them instead of carrying a
+          site-specific address. Requires a Windows x86 build (the PullSDK is 32-bit only).
+        </p>
+        <div class="row g-3">
+          <div class="col-md-4"><label class="form-label">IP</label><input class="form-control" name="zk.ip"></div>
+          <div class="col-md-2"><label class="form-label">Port</label><input type="number" class="form-control" name="zk.port"></div>
+          <div class="col-md-3"><label class="form-label">Timeout (ms)</label><input type="number" class="form-control" name="zk.timeout_ms"></div>
+          <div class="col-md-3">
+            <label class="form-label">Comm Password</label>
+            <input class="form-control" name="zk.password">
+            <div class="form-text">Leave empty if the controller has none.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- RabbitMQ (AMQP 0-9-1). Topology defaults match qt-mq-lab's
+           RabbitMQ.md so the two ends interoperate without editing anything. -->
+      <div class="card p-3 mb-3">
+        <h5>RabbitMQ Broker</h5>
+        <p class="text-muted small mb-2">
+          Message broker for publishing gateway events and receiving commands, reached from Lua as
+          <code>Mq.Publish()</code> / <code>Mq.Get()</code> &mdash; see the
+          <a href="/lua_docs.html">Lua API Documentation</a>. Note the default login is
+          <code>dev</code>/<code>devpass</code>, <strong>not</strong> RabbitMQ's stock
+          <code>guest</code>/<code>guest</code>: that user has to exist on the broker and be granted
+          on the vhost.
+        </p>
+
+        <div class="form-check mb-3">
+          <input class="form-check-input" type="checkbox" name="mq.enabled" id="mqEnabled">
+          <label class="form-check-label" for="mqEnabled">Enabled</label>
+        </div>
+
+        <div class="row g-3">
+          <div class="col-md-4"><label class="form-label">Host</label><input class="form-control" name="mq.host"></div>
+          <div class="col-md-2"><label class="form-label">Port</label><input type="number" class="form-control" name="mq.port"></div>
+          <div class="col-md-2"><label class="form-label">Virtual Host</label><input class="form-control" name="mq.vhost"></div>
+          <div class="col-md-2"><label class="form-label">User</label><input class="form-control" name="mq.user"></div>
+          <div class="col-md-2"><label class="form-label">Password</label><input type="password" class="form-control" name="mq.password"></div>
+        </div>
+
+        <div class="row g-3 mt-1">
+          <div class="col-md-3"><label class="form-label">Exchange</label><input class="form-control" name="mq.exchange">
+            <div class="form-text">Empty targets the default exchange (routes by queue name).</div>
+          </div>
+          <div class="col-md-2">
+            <label class="form-label" for="mqExchangeType">Exchange Type</label>
+            <select class="form-select" name="mq.exchange_type" id="mqExchangeType">
+              <option value="direct">direct</option>
+              <option value="fanout">fanout</option>
+              <option value="topic">topic</option>
+              <option value="headers">headers</option>
+            </select>
+          </div>
+          <div class="col-md-3"><label class="form-label">Queue</label><input class="form-control" name="mq.queue"></div>
+          <div class="col-md-2"><label class="form-label">Routing Key</label><input class="form-control" name="mq.routing_key"></div>
+          <div class="col-md-2"><label class="form-label">Prefetch</label><input type="number" class="form-control" name="mq.prefetch" min="1">
+            <div class="form-text">Unacked messages in flight.</div>
+          </div>
+        </div>
+
+        <div class="row g-3 mt-1">
+          <div class="col-md-3 d-flex align-items-end">
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" name="mq.declare_topology" id="mqDeclareTopology">
+              <label class="form-check-label" for="mqDeclareTopology">Declare exchange/queue/binding</label>
+            </div>
+          </div>
+          <div class="col-md-2 d-flex align-items-end">
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" name="mq.consume" id="mqConsume">
+              <label class="form-check-label" for="mqConsume">Consume</label>
+            </div>
+          </div>
+          <div class="col-md-3 d-flex align-items-end">
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" name="mq.envelope" id="mqEnvelope">
+              <label class="form-check-label" for="mqEnvelope">Wrap bodies in the v1 envelope</label>
+            </div>
+          </div>
+          <div class="col-md-2"><label class="form-label">Heartbeat (s)</label><input type="number" class="form-control" name="mq.heartbeat_sec" min="0">
+            <div class="form-text">0 disables.</div>
+          </div>
+          <div class="col-md-2"><label class="form-label">Reconnect (ms)</label><input type="number" class="form-control" name="mq.reconnect_interval_ms" min="500"></div>
+        </div>
+
+        <div class="row g-3 mt-1">
+          <div class="col-md-3"><label class="form-label">Publish Queue Limit</label><input type="number" class="form-control" name="mq.publish_queue_limit" min="1">
+            <div class="form-text">Messages held while the broker is unreachable, then Mq.Publish() fails.</div>
+          </div>
+          <div class="col-md-3"><label class="form-label">Inbox Limit</label><input type="number" class="form-control" name="mq.inbox_limit" min="1">
+            <div class="form-text">Received messages kept for <code>Mq.Get()</code>; the oldest is dropped when full.</div>
+          </div>
+        </div>
+
+        <div class="d-flex align-items-center gap-2 mt-3">
+          <button type="button" id="btnTestMq" class="btn btn-outline-secondary btn-sm">Test Connect</button>
+          <button type="button" id="btnMqPublish" class="btn btn-outline-secondary btn-sm">Send Test Message</button>
+          <span id="mqTestResult" class="small"></span>
+        </div>
+        <div class="form-text">
+          Test Connect uses the values in this form (nothing needs to be saved first) and completes the
+          AMQP handshake, so it checks the credentials and vhost too. Send Test Message goes through the
+          running client with the <em>saved</em> settings.
+        </div>
+      </div>
+
+      <div class="card p-3 mb-3">
+        <h5>Card Reader Client API</h5>
+        <p class="text-muted small mb-2">
+          Lets external card reader clients (USB/TCP/desktop/mobile) submit card UIDs to
+          <code>POST /api/card/input</code> instead of talking to RFID hardware directly. See the
+          <a href="/test_tools.html">Test Tools &rsaquo; Card Clients</a> to manage individual client API-Keys.
+        </p>
+        <div class="form-check mb-3">
+          <input class="form-check-input" type="checkbox" name="card_api.enabled" id="cardApiEnabled">
+          <label class="form-check-label" for="cardApiEnabled">Enabled</label>
+        </div>
+
+        <div class="border-top pt-3">
+          <label class="form-label">Quick API-Key</label>
+          <div class="input-group" style="max-width: 32rem;">
+            <input id="quickClientName" class="form-control" placeholder="Client name (e.g. Turnstile Reader 1)">
+            <button type="button" id="btnGenerateCardKey" class="btn btn-outline-secondary">Generate &amp; Save</button>
+          </div>
+          <div id="cardKeyResult" class="small mt-2"></div>
+          <div id="cardKeyBox" class="input-group mt-2 d-none" style="max-width: 32rem;">
+            <input id="cardKeyValue" class="form-control" readonly>
+            <button type="button" id="btnCopyCardKey" class="btn btn-outline-secondary">Copy</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Structured logging (upgrade.md sections 7-11). Separate from the
+           runtime log, which needs no configuration: it is a rotating file plus
+           an in-memory buffer and neither grows without bound. These rows do. -->
+      <div class="card p-3 mb-3">
+        <h5>Structured Logging</h5>
+        <p class="text-muted small mb-2">
+          Business records written by scripts with <code>Log.Write(type, data)</code>, stored in
+          <code>config/logs.db</code> and searchable on the
+          <a href="/logs.html">Logs &rsaquo; Structured Logs</a> tab. The runtime log
+          (<code>Log.Info</code> and friends) is unaffected by these settings.
+        </p>
+        <div class="row g-3">
+          <div class="col-md-3 d-flex align-items-end">
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" name="logging.store_enabled" id="logStoreEnabled">
+              <label class="form-check-label" for="logStoreEnabled">Enabled</label>
+            </div>
+          </div>
+          <div class="col-md-3 d-flex align-items-end">
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" name="logging.debug_enabled" id="logDebugEnabled">
+              <label class="form-check-label" for="logDebugEnabled">DEBUG logging</label>
+              <div class="form-text">
+                Off by default. Turns on <code>Log.Debug()</code> and the gateway's diagnostic detail
+                (serial open timings, raw traffic). Every line is a file write &mdash; leave it off in
+                normal operation. Takes effect within a second of saving, no restart.
+              </div>
+            </div>
+          </div>
+          <div class="col-md-3">
+            <label class="form-label">Retention (days)</label>
+            <input type="number" class="form-control" name="logging.retention_days" min="0">
+            <div class="form-text">0 keeps everything. Applied at startup.</div>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Definitions File</label>
+            <input class="form-control" name="logging.definitions_path">
+            <div class="form-text">
+              Log types and their fields. Relative paths resolve against the config directory.
+              Reloaded on gateway restart.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Over-the-air updates (request/CICD.md). Off by default: a gateway
+           that has just been upgraded into a build with this section must not
+           start making outbound requests to a host nobody has chosen. -->
+      <div class="card p-3 mb-3">
+        <h5>Software Update</h5>
+        <p class="text-muted small mb-2">
+          Checks the release server for a newer build and offers it in a popup. Nothing is ever
+          installed without someone clicking <em>Update now</em>. Packages are checked against the
+          manifest&rsquo;s SHA-256 and a detached signature before anything is unpacked; a release
+          that fails to start is rolled back automatically. See <code>docs/ota-update.md</code>.
+        </p>
+
+        <div id="updateStatusBox" class="alert alert-secondary py-2 px-3 small d-none" role="status"></div>
+
+        <div class="row g-3">
+          <div class="col-md-3 d-flex align-items-end">
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" name="update.enabled" id="updateEnabled">
+              <label class="form-check-label" for="updateEnabled">Enabled</label>
+            </div>
+          </div>
+          <div class="col-md-9">
+            <label class="form-label">Update Server URL</label>
+            <input class="form-control" name="update.url" placeholder="https://update.example.com/gateway/latest">
+            <div class="form-text">
+              The gateway appends <code>?platform=&amp;channel=&amp;version=&amp;device_id=</code>. A static
+              <code>version.json</code> works too &mdash; see the manifest formats in the docs.
+            </div>
+          </div>
+
+          <div class="col-md-3">
+            <label class="form-label">Channel</label>
+            <input class="form-control" name="update.channel">
+          </div>
+          <div class="col-md-3">
+            <label class="form-label">Check Interval (hours)</label>
+            <input type="number" class="form-control" name="update.check_interval_hours" min="1">
+          </div>
+          <div class="col-md-3">
+            <label class="form-label">Startup Delay (s)</label>
+            <input type="number" class="form-control" name="update.initial_delay_sec" min="0">
+            <div class="form-text">Grace before the first check, so it does not compete with startup.</div>
+          </div>
+          <div class="col-md-3">
+            <label class="form-label">Request Timeout (s)</label>
+            <input type="number" class="form-control" name="update.timeout_sec" min="1">
+          </div>
+
+          <div class="col-md-3 d-flex align-items-end">
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" name="update.require_signature" id="updateRequireSig">
+              <label class="form-check-label" for="updateRequireSig">Require signature</label>
+              <div class="form-text">
+                Leave this on. Off reduces the check to &ldquo;the bytes match the checksum the same
+                server supplied&rdquo;, which catches corruption and nothing else.
+              </div>
+            </div>
+          </div>
+          <div class="col-md-3 d-flex align-items-end">
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" name="update.ssl_verify" id="updateSslVerify">
+              <label class="form-check-label" for="updateSslVerify">Verify TLS certificate</label>
+            </div>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Public Key File</label>
+            <input class="form-control" name="update.public_key_path">
+            <div class="form-text">PEM public key. Relative paths resolve against the config directory.</div>
+          </div>
+
+          <div class="col-md-3">
+            <label class="form-label">Health Confirm (s)</label>
+            <input type="number" class="form-control" name="update.health_confirm_sec" min="0">
+            <div class="form-text">Uptime after which a new release counts as good.</div>
+          </div>
+          <div class="col-md-3">
+            <label class="form-label">Boot Attempts</label>
+            <input type="number" class="form-control" name="update.max_boot_attempts" min="1">
+            <div class="form-text">Failed starts before rolling back.</div>
+          </div>
+          <div class="col-md-3">
+            <label class="form-label">Keep Old Releases</label>
+            <input type="number" class="form-control" name="update.keep_releases" min="0">
+          </div>
+          <div class="col-md-3">
+            <label class="form-label">Install Root</label>
+            <input class="form-control" name="update.install_root" placeholder="(auto-detect)">
+            <div class="form-text">Leave blank unless the layout is non-standard.</div>
+          </div>
+
+          <div class="col-md-6">
+            <label class="form-label">Restart Command</label>
+            <input class="form-control" name="update.restart_command" placeholder="(exit and let the service manager restart)">
+            <div class="form-text">
+              Blank is the default and the safer one: the gateway shuts down cleanly and exits
+              <code>75</code>, leaving the restart to systemd. Set e.g.
+              <code>systemctl restart hsf-gateway</code> only if nothing supervises it.
+            </div>
+          </div>
+          <div class="col-md-6 d-flex align-items-end gap-2">
+            <button type="button" id="btnCheckUpdate" class="btn btn-outline-secondary">Check for updates now</button>
+            <span id="updateCheckResult" class="small"></span>
+          </div>
+        </div>
+      </div>
+
+      <button type="submit" class="btn btn-primary">Save Configuration</button>
+    </form>
+    <div class="card mt-3">
+      <div class="card-body d-flex gap-2 align-items-center flex-wrap">
+        <strong>Configuration file</strong>
+        <button type="button" class="btn btn-outline-secondary" id="exportConfig">Export</button>
+        <label class="btn btn-outline-primary mb-0">Import
+          <input type="file" id="importConfig" accept="application/json,.json" hidden>
+        </label>
+        <span class="small text-muted" id="configFileResult"></span>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="js/layout.js"></script>
+  <script src="js/ws.js"></script>
+  <!-- Update popup: on every page with the shared chrome, so a release that
+       lands while someone is on Logs or Test Tools is still noticed. -->
+  <script src="js/update.js"></script>
+  <script src="js/config.js"></script>
+</body>
+</html>

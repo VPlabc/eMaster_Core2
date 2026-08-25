@@ -1,0 +1,29 @@
+# Line endings.
+#
+# This repository is developed on Windows and built on Windows, Linux and macOS
+# (build.bat / build.sh, and the three release targets in release.md). Git's
+# core.autocrlf already keeps the checked-in form LF, but that is a per-machine
+# setting -- one contributor with it off is enough to commit a shell script with
+# CRLF endings, and a CRLF shell script does not fail politely on Ubuntu: it
+# fails with
+#
+#     ./build.sh: /usr/bin/env: bad interpreter: No such file or directory
+#
+# which names neither the file nor the real problem. Pinning the ones that MUST
+# be LF costs nothing and removes that afternoon entirely.
+*.sh    text eol=lf
+*.bash  text eol=lf
+*.lua   text eol=lf
+
+# Windows-only by nature; keep them CRLF so Notepad and cmd.exe are happy.
+*.bat   text eol=crlf
+*.ps1   text eol=crlf
+
+# Never touched: a "fixed" binary is a corrupted binary.
+*.png   binary
+*.dll   binary
+*.lib   binary
+*.exe   binary
+*.rar   binary
+*.zip   binary
+*.xls   binary

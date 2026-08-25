@@ -1,0 +1,58 @@
+Copyright (c) 2026 YOUR_COMPANY_NAME. All rights reserved.
+
+PROPRIETARY AND CONFIDENTIAL
+
+This software and its accompanying documentation, source code, scripts and
+assets (the "Software") are the proprietary and confidential property of
+YOUR_COMPANY_NAME.
+
+No licence, right or interest in the Software is granted except by a separate
+written agreement signed by YOUR_COMPANY_NAME. Without such an agreement you
+may not use, copy, modify, merge, publish, distribute, sublicense, sell,
+reverse engineer, decompile or disassemble the Software, in whole or in part.
+
+Unauthorised copying, distribution or disclosure of the Software, by any
+medium, is strictly prohibited.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
+YOUR_COMPANY_NAME BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
+IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+---
+
+THIRD-PARTY COMPONENTS
+
+The Software incorporates third-party components that remain subject to their
+own licences. The terms above do not extend to them, and nothing here grants
+any right in them.
+
+Bundled in this repository:
+
+  third_party/plcommpro/
+      ZKTeco PullSDK (plcommpro.dll and its companion communication DLLs).
+      Redistributed binaries owned by ZKTeco. Not covered by the notice above;
+      redistribution is governed by ZKTeco's own SDK licence terms. These are
+      32-bit Windows binaries and are included only in Windows x86 packages
+      (builds configured with -DHSF_ENABLE_ZK=OFF omit them entirely).
+
+Acquired at build time via vcpkg, and linked into the gateway binary:
+
+  Crow             BSD-3-Clause
+  libcurl          curl licence (MIT/X derivative)
+  nlohmann/json    MIT
+  Lua 5.4          MIT
+  Asio             Boost Software License 1.0
+  SQLite3          Public domain
+
+Loaded by the web dashboard from a public CDN at runtime (not redistributed
+in this repository):
+
+  Bootstrap 5.3    MIT
+  Chart.js         MIT
+
+Before distributing a release, confirm the ZKTeco redistribution terms cover
+your intended use, and update the vcpkg component list above if
+vcpkg.json changes.

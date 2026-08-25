@@ -1,0 +1,219 @@
+# Release pipeline (request/release.md sections 25, 29, 30).
+#
+# Fires when a v* tag is pushed. Builds every platform package, checks the tag
+# against VERSION, generates checksums, and creates a DRAFT GitHub Release so
+# a human approves the notes before anything is published.
+name: release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to build (must already exist)'
+        required: true
+
+permissions:
+  contents: write
+
+env:
+  VCPKG_DISABLE_METRICS: '1'
+
+jobs:
+  # Runs first and gates everything else: a tag that disagrees with VERSION
+  # produces packages whose filenames lie about their contents, and that is
+  # far more annoying to unpick after the artifacts are published.
+  verify-version:
+    name: Tag matches VERSION
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.check.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: check
+        run: |
+          VERSION="$(head -n1 VERSION | tr -d '[:space:]')"
+          TAG="${GITHUB_REF_NAME#v}"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TAG="${{ inputs.tag }}"; TAG="${TAG#v}"
+          fi
+          echo "VERSION file: $VERSION"
+          echo "Tag:          $TAG"
+          if [ "$VERSION" != "$TAG" ]; then
+            echo "::error::Tag v$TAG does not match VERSION ($VERSION). Bump VERSION or retag." >&2
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: CHANGELOG has an entry for this version
+        run: |
+          VERSION="$(head -n1 VERSION | tr -d '[:space:]')"
+          if ! grep -q "^## \[$VERSION\]" CHANGELOG.md; then
+            echo "::error::CHANGELOG.md has no '## [$VERSION]' section" >&2
+            exit 1
+          fi
+
+  package:
+    name: ${{ matrix.name }}
+    needs: verify-version
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: windows-x86
+            os: windows-latest
+            script: pwsh -File scripts/package.ps1 -Arch x86
+          - name: windows-x64
+            os: windows-latest
+            script: pwsh -File scripts/package.ps1 -Arch x64
+          - name: linux-x64
+            os: ubuntu-latest
+            script: ./scripts/package.sh linux-x64
+          - name: macos-arm64
+            os: macos-latest
+            script: ./scripts/package.sh macos-arm64
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # so the commit hash stamped into the binary is real
+
+      - name: Install build dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential cmake pkg-config curl zip unzip tar \
+            autoconf automake libtool
+
+      - name: Set up vcpkg
+        uses: lukka/run-vcpkg@v11
+        with:
+          vcpkgGitCommitId: '${{ hashFiles(''vcpkg.json'') }}'
+          runVcpkgInstall: false
+
+      - name: Package
+        run: ${{ matrix.script }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: package-${{ matrix.name }}
+          path: |
+            dist/*.tar.gz
+            dist/*.zip
+
+  publish:
+    name: Draft GitHub Release
+    needs: [verify-version, package]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      # Each package job wrote its own SHA256SUMS locally, so they never saw
+      # each other's lines. Regenerate one combined file over everything that
+      # actually arrived here.
+      - name: Generate SHA256SUMS
+        working-directory: artifacts
+        run: |
+          rm -f SHA256SUMS
+          sha256sum *.tar.gz *.zip 2>/dev/null | tee SHA256SUMS
+
+      # The update manifest UpdateManager polls (request/CICD.md sections 1-2).
+      # One version.json with a `platforms` map, so a single file serves every
+      # build of this tag, and every entry carries a detached signature over
+      # <version>\n<platform>\n<sha256> -- see scripts/make-manifest.sh and
+      # src/update/SignatureVerifier.cpp, which must agree byte for byte.
+      #
+      # UPDATE_SIGNING_KEY is a repository secret holding the PEM private key
+      # (Ed25519; `openssl genpkey -algorithm ed25519`). Without it the manifest
+      # is still produced, but unsigned -- and any gateway with the default
+      # update.require_signature will refuse every entry in it, which is the
+      # intended failure: honest and unusable, not usable and unverified.
+      # Guarded inside the script rather than with `if:` -- the secrets context
+      # is not reliably available to a step-level condition, and a workflow that
+      # silently skips signing is worse than one that says so.
+      - name: Write signing key
+        env:
+          UPDATE_SIGNING_KEY: ${{ secrets.UPDATE_SIGNING_KEY }}
+        run: |
+          if [ -z "${UPDATE_SIGNING_KEY:-}" ]; then
+            echo "::warning::UPDATE_SIGNING_KEY is not set -- version.json will be UNSIGNED and no gateway will accept it."
+            exit 0
+          fi
+          umask 077
+          printf '%s' "$UPDATE_SIGNING_KEY" > /tmp/update-signing-key.pem
+          openssl pkey -in /tmp/update-signing-key.pem -noout   # fail early on a malformed secret
+
+      # Runs before the manifest step, because both want the same thing: the
+      # CHANGELOG section for this version. RELEASE_NOTES.md becomes the GitHub
+      # release body; make-manifest.sh reads the same file for the bullets it
+      # puts in version.json, and ignores the platform table appended below
+      # (those lines are not bullets).
+      - name: Extract release notes from CHANGELOG
+        id: notes
+        run: |
+          VERSION="${{ needs.verify-version.outputs.version }}"
+          awk -v v="$VERSION" '
+            $0 ~ "^## \\[" v "\\]" { inside = 1; next }
+            inside && /^## \[/     { exit }
+            inside                 { print }
+          ' CHANGELOG.md > /tmp/notes.md
+          cp /tmp/notes.md RELEASE_NOTES.md
+          {
+            echo ""
+            echo "## Supported platforms"
+            echo ""
+            echo "| Package | ZKTeco card reader |"
+            echo "|---|---|"
+            echo "| windows-x86 | yes |"
+            echo "| windows-x64 | no |"
+            echo "| linux-x64 | no |"
+            echo "| macos-arm64 | no |"
+            echo ""
+            echo "ZKTeco support requires the PullSDK, a 32-bit Windows DLL, so it is"
+            echo "available only in the **windows-x86** package. All other hardware works"
+            echo "on every platform."
+            echo ""
+            echo "Verify downloads with \`sha256sum -c SHA256SUMS\`."
+          } >> RELEASE_NOTES.md
+          cat RELEASE_NOTES.md
+
+      - name: Generate version.json
+        run: |
+          # An `if`, not `[ -f … ] && KEY_ARG=…`: these steps run under `bash
+          # -e`, where that one-liner's non-zero exit on a missing key would
+          # fail the whole step -- turning "no signing secret configured" from
+          # a warning into a broken release build.
+          KEY_ARG=""
+          if [ -f /tmp/update-signing-key.pem ]; then
+            KEY_ARG="--key /tmp/update-signing-key.pem"
+          fi
+          # `bash scripts/...` rather than `./scripts/...`: the release depends
+          # on this running, and the executable bit does not reliably survive a
+          # commit made from Windows.
+          bash scripts/make-manifest.sh \
+            --version "${{ needs.verify-version.outputs.version }}" \
+            --dir artifacts \
+            --base-url "${{ github.server_url }}/${{ github.repository }}/releases/download/v${{ needs.verify-version.outputs.version }}" \
+            --notes /tmp/notes.md \
+            $KEY_ARG
+          rm -f /tmp/update-signing-key.pem
+          cat artifacts/version.json
+
+      # Draft, not published: a human reads the notes and confirms the manual
+      # checklist in docs/release-checklist.md before this goes public.
+      - uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          name: eMaster Gateway v${{ needs.verify-version.outputs.version }}
+          body_path: RELEASE_NOTES.md
+          files: |
+            artifacts/*.tar.gz
+            artifacts/*.zip
+            artifacts/SHA256SUMS
+            artifacts/version.json

@@ -1,0 +1,18 @@
+LIBRARY plcommpro
+EXPORTS
+    Connect
+    Disconnect
+    PullLastError
+    SetDeviceParam
+    GetDeviceParam
+    ControlDevice
+    SetDeviceData
+    GetDeviceData
+    GetDeviceDataCount
+    DeleteDeviceData
+    GetRTLog
+    SearchDevice
+    ModifyIPAddress
+    SetDeviceFileData
+    GetDeviceFileData
+    ProcessBackupData

@@ -1,0 +1,466 @@
+/* SmartLocker floor plan.
+
+   Layout and palette are "Hoàng Sơn Dashboard Format" -- the selectors, the
+   grid metrics and the colours below are that stylesheet. What is added at the
+   end, under "live-page additions", exists because this page shows a real
+   cabinet rather than a fixed sample: a connection indicator, toasts, door
+   badges, the contractor's daily-usage chip and the empty states.
+
+   The web font is loaded from Google if the gateway can reach it and falls back
+   to the system stack otherwise -- a locker cabinet on an isolated network is
+   the normal case, not the exception. */
+@import url('https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&display=swap');
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font-family: 'Be Vietnam Pro', 'Segoe UI', Helvetica, Arial, sans-serif;
+  background: #f6f6f5;
+  color: #2c2c2c;
+}
+a { color: #d98324; text-decoration: none; }
+a:hover { color: #b96c15; }
+input, select, button { font-family: inherit; }
+.nowrap { white-space: nowrap; }
+.spacer { flex: 1; }
+.hidden { display: none !important; }
+
+@keyframes hsfLogoIn {
+  0%   { opacity: 0; transform: translateY(-6px) scale(.96); filter: blur(3px); }
+  60%  { opacity: 1; filter: blur(0); }
+  100% { opacity: 1; transform: none; filter: blur(0); }
+}
+@keyframes hsfTitleIn {
+  from { opacity: 0; transform: translateX(-8px); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* ---------- header ---------- */
+
+.header {
+  display: flex; align-items: center; gap: 24px;
+  padding: 10px 28px 10px 0;
+  border-bottom: 1px solid #ececec; background: #fff;
+}
+.header__logo { width: 300px; display: flex; align-items: center; justify-content: center; flex: none; }
+.header__logo img { height: 56px; object-fit: contain; animation: hsfLogoIn .7s cubic-bezier(.2,.7,.3,1) both; }
+.header__brand { display: flex; align-items: center; gap: 16px; animation: hsfTitleIn .6s .18s cubic-bezier(.2,.7,.3,1) both; }
+.header__rule { width: 1px; height: 42px; background: linear-gradient(180deg, transparent, #e6d7bf, transparent); }
+.header__titles { display: flex; flex-direction: column; gap: 5px; }
+.header__name { display: flex; align-items: baseline; gap: 9px; white-space: nowrap; }
+.header__name span { font-size: 23px; font-weight: 800; letter-spacing: -.01em; color: #c9741a; }
+.header__name span:last-child { text-transform: uppercase; }
+.header__sub { display: flex; align-items: center; gap: 9px; white-space: nowrap; }
+.chip {
+  background: #fbf1e2; color: #b06e14; border: 1px solid #f0dcbc;
+  font-size: 11px; font-weight: 700; letter-spacing: .10em; text-transform: uppercase;
+  padding: 3px 10px; border-radius: 999px;
+}
+.header__area { font-size: 12px; color: #a9a9a4; }
+
+/* ---------- user + role menu ---------- */
+
+.user-wrap { position: relative; }
+.user {
+  display: flex; align-items: center; gap: 12px;
+  border: 1px solid #e2e2e2; border-radius: 999px; padding: 6px 8px 6px 20px;
+  box-shadow: 0 1px 3px rgba(0,0,0,.05); cursor: pointer; background: #fff;
+}
+.user:hover { border-color: #edd7b6; }
+.user__text { display: flex; flex-direction: column; align-items: flex-end; gap: 1px; }
+.user__name { font-size: 14px; font-weight: 600; white-space: nowrap; }
+.user__role { font-size: 11px; font-weight: 700; letter-spacing: .04em; color: #b06e14; white-space: nowrap; }
+.user__avatar {
+  width: 34px; height: 34px; border-radius: 999px; background: #efe7da;
+  display: flex; align-items: center; justify-content: center; color: #b06e14; flex: none;
+}
+.role-menu {
+  position: absolute; top: 56px; right: 0; z-index: 70; width: 280px;
+  background: #fff; border: 1px solid #e8e6e1; border-radius: 10px;
+  box-shadow: 0 16px 38px rgba(0,0,0,.16); padding: 8px;
+  display: flex; flex-direction: column;
+}
+.role-menu__head { padding: 8px 10px 10px; border-bottom: 1px solid #f2f0ec; margin-bottom: 6px; }
+.role-menu__kicker { font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #a2a29c; }
+.role-menu__cur { font-size: 14px; font-weight: 700; margin-top: 3px; }
+.role-menu__desc { font-size: 12px; color: #8a8a8a; margin-top: 2px; line-height: 1.4; }
+.role { display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-radius: 7px; cursor: pointer; }
+.role:hover { background: #faf3e9; }
+.role--on { background: #fbf1e2; }
+.role__radio {
+  width: 16px; height: 16px; border-radius: 999px; border: 2px solid #d9d7d2;
+  display: flex; align-items: center; justify-content: center; flex: none;
+}
+.role--on .role__radio { border-color: #e0912f; }
+.role__radio i { width: 8px; height: 8px; border-radius: 999px; background: transparent; display: block; }
+.role--on .role__radio i { background: #e0912f; }
+.role__label { flex: 1; font-size: 14px; font-weight: 500; color: #4b4b46; }
+.role--on .role__label { font-weight: 700; color: #b06e14; }
+.role__scope { font-size: 11px; color: #a2a29c; }
+.role-menu__link {
+  margin-top: 6px; padding-top: 9px; border-top: 1px solid #f2f0ec;
+  display: flex; align-items: center; gap: 8px; cursor: pointer;
+  font-size: 13px; font-weight: 700; color: #c9741a;
+}
+
+/* ---------- layout ---------- */
+
+.main { padding: 24px 28px; display: flex; flex-direction: column; gap: 16px; overflow-x: auto; }
+.toolbar-section { display: flex; flex-direction: column; gap: 16px; min-width: 1060px; }
+.toolbar { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.toolbar__icon {
+  width: 34px; height: 34px; border-radius: 9px; background: #fbf1e2; border: 1px solid #f0dcbc;
+  color: #c9741a; display: flex; align-items: center; justify-content: center; flex: none;
+}
+.toolbar h1 { margin: 0; font-size: 20px; font-weight: 700; }
+.toolbar__meta { display: flex; align-items: center; gap: 8px; font-size: 13px; color: #8a8a8a; white-space: nowrap; }
+.count-chip {
+  display: flex; align-items: baseline; gap: 4px;
+  background: #fbf1e2; border: 1px solid #f0dcbc; border-radius: 999px; padding: 4px 11px;
+}
+.count-chip b { font-size: 14px; font-weight: 800; color: #b06e14; }
+.count-chip span { font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #b06e14; }
+.btn-line {
+  display: flex; align-items: center; gap: 9px; background: #fff; border: 1px solid #e2e2e2;
+  border-radius: 8px; padding: 9px 14px; font-size: 14px; font-weight: 600; cursor: pointer;
+}
+.btn-line:hover { background: #faf3e9; border-color: #edd7b6; }
+.select {
+  display: flex; align-items: center; gap: 10px; background: #fff; border: 1px solid #e2e2e2;
+  border-radius: 8px; padding: 9px 14px; font-size: 14px; cursor: pointer;
+}
+
+/* ---------- stats ---------- */
+
+.stats { background: #fff; border: 1px solid #ececec; border-radius: 10px; padding: 16px 18px; }
+.stats__grid { display: grid; grid-template-columns: 1.35fr 1.35fr 1fr 1fr; gap: 12px; align-items: stretch; }
+.stat {
+  display: flex; align-items: center; gap: 12px; border: 1px solid #f0efec; border-radius: 8px;
+  padding: 10px 14px; background: #fdfcfa; cursor: pointer;
+}
+.stat:hover { border-color: #e6c78d; }
+.stat--big { gap: 15px; padding: 16px 18px; background: #fff; border-color: #e6e3dc; box-shadow: 0 1px 3px rgba(0,0,0,.05); }
+.stat--on { background: #fdf7ec; border-color: #e6c78d; box-shadow: 0 0 0 2px rgba(224,145,47,.28); }
+.stat__icon {
+  width: 34px; height: 34px; border-radius: 8px; border: 1px solid rgba(0,0,0,.10);
+  display: flex; align-items: center; justify-content: center; flex: none;
+}
+.stat--big .stat__icon { width: 44px; height: 44px; }
+.stat__text { display: flex; flex-direction: column; gap: 1px; }
+.stat__label { font-size: 12px; color: #8a8a8a; }
+.stat--big .stat__label { font-size: 13px; font-weight: 600; color: #6b6b66; }
+.stat__num { display: flex; align-items: baseline; gap: 3px; line-height: 1.1; }
+.stat__num b { font-size: 18px; font-weight: 800; letter-spacing: -.01em; }
+.stat--big .stat__num b { font-size: 30px; }
+.stat__num span { font-size: 12px; color: #a2a29c; }
+.stat--big .stat__num span { font-size: 14px; }
+.stats__filter {
+  display: flex; align-items: center; gap: 10px; margin-top: 14px; padding-top: 12px;
+  border-top: 1px solid #f2f0ec; font-size: 13px; color: #8a8a8a;
+}
+.stats__clear { font-weight: 600; color: #c9741a; cursor: pointer; }
+
+/* ---------- cabinet ---------- */
+
+.board { display: flex; gap: 24px; align-items: stretch; min-width: 1060px; }
+.cabinet {
+  background: #9b9b96; border-radius: 10px; padding: 16px; box-shadow: 0 10px 24px rgba(0,0,0,.12);
+  flex: 1; min-width: 620px; display: flex; flex-direction: column; transition: max-width .25s ease;
+}
+.cabinet--centered { max-width: 1100px; margin: 0 auto; }
+.cabinet__grid {
+  background: #8d8d88; border-radius: 6px; padding: 10px; flex: 1;
+  display: grid; grid-template-columns: repeat(3, minmax(180px, 1fr)); grid-auto-rows: 1fr; gap: 10px;
+}
+.cabinet__feet { display: flex; justify-content: space-between; padding: 14px 24px 0; }
+.cabinet__feet span { width: 18px; height: 16px; background: #7d7d78; border-radius: 0 0 4px 4px; }
+.locker {
+  border-radius: 4px; min-height: 132px; padding: 12px 14px; position: relative; cursor: pointer;
+  box-shadow: inset 0 -3px 0 rgba(0,0,0,.06); outline-offset: 1px; border: 1px solid transparent;
+}
+.locker:hover { outline: 2px solid #e0912f; }
+.locker--selected { outline: 2px solid #e0912f; }
+.locker--match { box-shadow: inset 0 -3px 0 rgba(0,0,0,.06), 0 0 0 2px rgba(224,145,47,.55); }
+.locker__id {
+  position: absolute; top: 10px; right: 12px; background: #fff; border: 1px solid #cfd6e4;
+  border-radius: 3px; padding: 2px 9px; font-size: 12px; font-weight: 700; color: #2f4b8b;
+}
+.locker__lock {
+  width: 28px; height: 44px; border-radius: 5px; border: 1px solid rgba(0,0,0,.22);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.35), 0 1px 2px rgba(0,0,0,.10);
+  margin-top: 24px; display: flex; align-items: center; justify-content: center;
+}
+.locker__slot { position: absolute; left: 58px; right: 14px; top: 76px; height: 9px; border-radius: 5px; background: rgba(0,0,0,.10); }
+.locker__foot {
+  position: absolute; left: 14px; right: 14px; bottom: 12px;
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+}
+.locker__user { font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.locker__dot { width: 9px; height: 9px; border-radius: 999px; flex: none; }
+
+/* ---------- side panel ---------- */
+
+.aside {
+  width: 380px; flex: none; display: flex; flex-direction: column; gap: 16px;
+  align-self: flex-start; transition: width .25s ease;
+}
+.aside--hidden { width: 0; overflow: hidden; }
+.panel { border: 1px solid #edd7b6; border-radius: 10px; background: #fff; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,.05); }
+.panel__head {
+  background: linear-gradient(180deg, #e9a049, #dd8a24); color: #fff; font-size: 16px; font-weight: 600;
+  padding: 14px 20px; display: flex; align-items: center; gap: 12px;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.28); text-shadow: 0 1px 1px rgba(140,80,10,.25);
+}
+.panel__close { font-size: 13px; font-weight: 600; opacity: .9; cursor: pointer; background: none; border: 0; color: inherit; }
+.panel__close:hover { opacity: 1; }
+.tabs { display: flex; border-bottom: 1px solid #f0e6d6; background: #fdf9f3; }
+.tab {
+  flex: 1; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 12px 8px;
+  font-size: 14px; cursor: pointer; color: #8a8a8a; font-weight: 500;
+  border: 0; border-bottom: 2px solid transparent; background: none;
+}
+.tab:hover { background: #faf3e9; }
+.tab--active { color: #c97a17; font-weight: 700; border-bottom-color: #e0912f; }
+.detail { padding: 18px; display: flex; flex-direction: column; gap: 14px; }
+.detail__row { display: flex; justify-content: space-between; gap: 16px; font-size: 14px; border-bottom: 1px dashed #eee; padding-bottom: 10px; }
+.detail__k { color: #8a8a8a; }
+.detail__v { font-weight: 600; text-align: right; }
+.actions { display: flex; gap: 10px; padding-top: 4px; }
+.btn {
+  flex: 1; display: flex; align-items: center; justify-content: center; gap: 8px;
+  font-size: 14px; padding: 11px; border-radius: 8px; cursor: pointer; border: 0;
+}
+.btn--primary { background: #e0912f; color: #fff; font-weight: 700; }
+.btn--primary:hover { background: #c97a17; }
+.btn--ghost { border: 1px solid #e2e2e2; background: #fff; font-weight: 600; }
+.btn--ghost:hover { background: #faf3e9; }
+.logs { padding: 14px 18px; display: flex; flex-direction: column; }
+.logs__hint { font-size: 12px; color: #a2a29c; padding: 10px 0 8px; }
+.log { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid #f2f2f2; font-size: 13px; }
+.log__icon {
+  width: 26px; height: 26px; border-radius: 999px; background: #fbf1e2; color: #c9741a;
+  display: flex; align-items: center; justify-content: center; flex: none;
+}
+.log__time { color: #8a8a8a; white-space: nowrap; }
+.log__text { flex: 1; }
+.empty { padding: 26px 0; text-align: center; font-size: 13px; color: #a2a29c; }
+
+/* ---------- search box ---------- */
+
+.search { display: flex; align-items: stretch; border: 1px solid #e0dedb; border-radius: 6px; overflow: hidden; }
+.search input { flex: 1; min-width: 0; border: 0; outline: none; background: #f2f0ec; font-size: 13px; padding: 8px 12px; color: #2c2c2c; }
+.search button { width: 40px; border: 0; background: #e9a53f; display: flex; align-items: center; justify-content: center; cursor: pointer; flex: none; }
+.search button:hover { background: #d8912a; }
+
+/* ---------- modals ---------- */
+
+.overlay {
+  position: fixed; inset: 0; background: rgba(30,26,20,.42);
+  display: flex; align-items: center; justify-content: center; padding: 40px; z-index: 50;
+}
+.modal {
+  width: 920px; max-width: 100%; max-height: 100%; background: #fff; border-radius: 12px;
+  box-shadow: 0 24px 60px rgba(0,0,0,.28); display: flex; flex-direction: column;
+}
+.modal--perms { width: 980px; }
+.modal__head {
+  border-radius: 12px 12px 0 0; background: linear-gradient(180deg, #e9a049, #dd8a24); color: #fff;
+  padding: 16px 22px; display: flex; align-items: center; gap: 12px; box-shadow: inset 0 1px 0 rgba(255,255,255,.28);
+}
+.modal__title { flex: 1; font-size: 17px; font-weight: 700; text-shadow: 0 1px 1px rgba(140,80,10,.25); }
+.modal__close { font-size: 14px; font-weight: 600; opacity: .9; cursor: pointer; background: none; border: 0; color: inherit; }
+.modal__tools { padding: 14px 22px; border-bottom: 1px solid #f2f0ec; display: flex; flex-direction: column; gap: 12px; }
+.modal__toolrow { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.modal__body { overflow: auto; padding: 0 22px 8px; }
+.modal__foot {
+  border-radius: 0 0 12px 12px; background: #fff; padding: 14px 22px; border-top: 1px solid #f2f0ec;
+  display: flex; align-items: center; gap: 12px;
+}
+.pill {
+  font-size: 13px; font-weight: 600; padding: 7px 14px; border-radius: 999px; cursor: pointer;
+  white-space: nowrap; background: #fff; color: #7a7a75; border: 1px solid #e8e6e1;
+}
+.pill:hover { border-color: #edd7b6; }
+.pill--on { background: #fbf1e2; color: #b06e14; border-color: #edd7b6; }
+.funnel { display: flex; align-items: center; justify-content: center; width: 30px; height: 30px; cursor: pointer; color: #c6c4bf; }
+.funnel--on { color: #e9a53f; }
+.count { font-size: 12px; color: #a2a29c; }
+
+/* ---------- date range + calendar ---------- */
+
+.range { position: relative; flex: none; }
+.range__btn {
+  display: flex; align-items: center; gap: 10px; border: 1px solid #d9d7d2; border-radius: 6px;
+  padding: 9px 13px; font-size: 14px; cursor: pointer; background: #fff; white-space: nowrap;
+}
+.range__btn:hover { border-color: #edd7b6; }
+.cal {
+  position: absolute; top: 46px; right: 0; z-index: 60; background: #fff; border: 1px solid #e8e6e1;
+  border-radius: 10px; box-shadow: 0 14px 34px rgba(0,0,0,.16); padding: 14px; width: 286px;
+}
+.cal__head { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+.cal__nav { width: 28px; height: 28px; border-radius: 6px; display: flex; align-items: center; justify-content: center; cursor: pointer; color: #7a7a75; }
+.cal__nav:hover { background: #faf3e9; color: #c9741a; }
+.cal__title { flex: 1; text-align: center; font-size: 14px; font-weight: 700; }
+.cal__grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+.cal__wd { text-align: center; font-size: 11px; font-weight: 700; color: #a2a29c; }
+.cal__d { height: 27px; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 500; border-radius: 6px; cursor: pointer; }
+.cal__d:hover { outline: 1px solid #edd7b6; }
+.cal__d--mid { background: #fbf1e2; color: #b06e14; border-radius: 0; }
+.cal__d--on { background: #e0912f; color: #fff; font-weight: 700; }
+.cal__d--pad { cursor: default; }
+.cal__foot { display: flex; align-items: center; gap: 8px; margin-top: 10px; padding-top: 9px; border-top: 1px solid #f2f0ec; }
+.cal__hint { flex: 1; font-size: 12px; color: #a2a29c; line-height: 1.3; }
+.cal__clear { font-size: 13px; font-weight: 600; color: #7a7a75; padding: 7px 12px; border-radius: 6px; cursor: pointer; }
+.cal__apply { font-size: 13px; font-weight: 700; color: #fff; background: #e0912f; padding: 7px 15px; border-radius: 6px; cursor: pointer; }
+
+/* ---------- history table ---------- */
+
+.hrow {
+  display: grid; grid-template-columns: 140px 74px minmax(180px, 1fr) 130px; gap: 12px;
+  padding: 13px 0; border-bottom: 1px solid #f7f6f3; align-items: center; font-size: 14px;
+}
+.hrow--head {
+  padding: 12px 0 10px; border-bottom: 1px solid #f2f0ec; position: sticky; top: 0; background: #fff;
+  font-size: 12px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: #a2a29c; white-space: nowrap;
+}
+.hrow span { white-space: nowrap; }
+.hrow__locker { font-weight: 700; color: #2f4b8b; }
+.hrow__time { color: #8a8a8a; }
+.hrow__act { display: flex; align-items: center; gap: 9px; min-width: 0; }
+.hrow__act > span { overflow: hidden; text-overflow: ellipsis; }
+.hrow__dot { width: 8px; height: 8px; border-radius: 999px; flex: none; }
+.hrow__actor { color: #4b4b46; overflow: hidden; text-overflow: ellipsis; }
+
+/* ---------- permissions ---------- */
+
+.prow { display: grid; grid-template-columns: 300px repeat(5, 1fr); padding: 12px 0; border-bottom: 1px solid #f7f6f3; align-items: center; }
+.prow--head { padding: 12px 0 10px; border-bottom: 1px solid #f2f0ec; position: sticky; top: 0; background: #fff; }
+.prow--head span { text-align: center; font-size: 12px; font-weight: 700; color: #a2a29c; }
+.prow--head .prow__k { text-align: left; letter-spacing: .04em; text-transform: uppercase; }
+.prow--head .prow__c--on { color: #b06e14; }
+.prow__label { display: flex; flex-direction: column; gap: 2px; }
+.prow__label b { font-size: 14px; font-weight: 600; }
+.prow__label i { font-size: 12px; color: #a2a29c; font-style: normal; }
+.prow__cell { display: flex; align-items: center; justify-content: center; }
+.mark { display: flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 6px; font-size: 12px; font-weight: 800; }
+.mark--y { background: #e4f1e6; color: #2f7a4f; }
+.mark--n { background: #f4f2ee; color: #b3b0aa; }
+.mark--p { background: #fdefc6; color: #a97a10; }
+.mark--on { box-shadow: 0 0 0 2px rgba(224,145,47,.35); }
+.legend-marks { display: flex; align-items: center; gap: 16px; flex: 1; font-size: 12px; color: #8a8a8a; flex-wrap: wrap; }
+.legend-marks div { display: flex; align-items: center; gap: 6px; }
+
+/* ==================================================================
+   Live-page additions
+   Not in the mockup, which had no gateway behind it.
+   ================================================================== */
+
+/* Connection state. Deliberately quiet when everything is fine and loud when
+   it is not: on a wall display, a page that silently stopped updating looks
+   exactly like a cabinet where nothing is happening. */
+.link-status {
+  display: flex; align-items: center; gap: 8px; font-size: 12px; color: #8a8a8a;
+  border: 1px solid #ececec; border-radius: 999px; padding: 6px 14px; background: #fff; white-space: nowrap;
+}
+.link-status__dot { width: 8px; height: 8px; border-radius: 999px; background: #c9c9c9; flex: none; }
+.link-status--live { border-color: #cfe7d6; color: #2f7a4f; }
+.link-status--live .link-status__dot { background: #3aa76d; }
+.link-status--lost { border-color: #eebfb6; color: #a8452f; }
+.link-status--lost .link-status__dot { background: #d0483c; animation: hsfBlink 1.2s ease-in-out infinite; }
+@keyframes hsfBlink { 50% { opacity: .25; } }
+
+/* The block picker is the mockup's .select with a real <select> inside it. */
+.select select { border: 0; background: none; font-size: 14px; color: #2c2c2c; cursor: pointer; outline: none; padding-right: 4px; }
+
+/* A door's live extras: open, mid-cycle, or with no unlock output wired at all
+   (a locker the state page must not offer to open). */
+.locker__badge {
+  position: absolute; top: 10px; left: 12px; font-size: 10px; font-weight: 700;
+  letter-spacing: .04em; text-transform: uppercase; padding: 2px 7px; border-radius: 3px;
+  background: #fff; border: 1px solid #d8d5cd; color: #7a7a75;
+}
+.locker__badge--open { background: #fdefc6; border-color: #e6c778; color: #a97a10; }
+.locker__badge--nolock { background: #f4f2ee; border-color: #ddd9d1; color: #9a968e; }
+
+/* The contractor's working day (CardScanPlan section 1). A separate word from
+   the locker's status on purpose: the door can be ASSIGNED while the person's
+   day is COMPLETED, and one chip must not be read as the other. */
+.usage {
+  display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 700;
+  letter-spacing: .03em; padding: 2px 8px; border-radius: 999px; border: 1px solid transparent; white-space: nowrap;
+}
+.usage__dot { width: 7px; height: 7px; border-radius: 999px; flex: none; background: currentColor; }
+.usage--NOT_STARTED { background: #f4f2ee; border-color: #ddd9d1; color: #7a7a75; }
+.usage--USING      { background: #e4f1e6; border-color: #a9cfb2; color: #2f7a4f; }
+.usage--COMPLETED  { background: #e7edf8; border-color: #b9c8e4; color: #2f4b8b; }
+.usage--EXPIRED    { background: #f8e0dc; border-color: #e3a99f; color: #a8452f; }
+/* To the right of the lock body and above the slot, which is the only free
+   strip on a tile once the id, the lock and the name are placed. */
+.locker__usage {
+  position: absolute; left: 58px; top: 40px; max-width: calc(100% - 74px);
+  font-size: 10px; font-weight: 700; letter-spacing: .03em;
+  padding: 1px 6px; border-radius: 3px; border: 1px solid transparent;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+/* A block whose door count does not divide by three leaves holes; they keep
+   their grid cell so every door below them stays in its own column. */
+.cabinet__gap { visibility: hidden; }
+
+/* How long the locker is still theirs. Top-right under the door number, which
+   is the one strip on a tile that nothing else uses. */
+.locker__hold {
+  position: absolute; right: 14px; top: 40px;
+  font-size: 10px; font-weight: 700; letter-spacing: .02em;
+  padding: 1px 6px; border-radius: 3px; white-space: nowrap;
+  background: #fff; border: 1px solid #d8d5cd; color: #7a7a75;
+}
+.locker__hold--soon { background: #fdefc6; border-color: #e6c778; color: #a97a10; }
+.locker__hold--over { background: #f8e0dc; border-color: #e3a99f; color: #a8452f; }
+
+/* The same figure in the detail panel, where it has room to be read. */
+.remain { font-weight: 700; }
+.remain--soon { color: #a97a10; }
+.remain--over { color: #a8452f; }
+.detail__v .usage { margin-left: 6px; }
+.detail__v--error { color: #a8452f; font-weight: 700; }
+
+/* Empty states: an unconfigured cabinet and an unreachable script look
+   different, and the operator needs to be told which one this is. */
+.cabinet__empty {
+  grid-column: 1 / -1; display: flex; align-items: center; justify-content: center; text-align: center;
+  min-height: 240px; padding: 28px; color: #f2efe9; font-size: 14px; line-height: 1.7;
+}
+.cabinet__empty b { color: #fff; }
+
+.notice {
+  font-size: 12px; line-height: 1.6; color: #8a6a2a; background: #fdf7ec;
+  border: 1px solid #f0dcbc; border-radius: 8px; padding: 10px 12px;
+}
+
+.log__icon--granted { background: #e4f1e6; color: #2f7a4f; }
+.log__icon--denied  { background: #f8e0dc; color: #a8452f; }
+
+/* History paging. SQLite does the filtering and the counting, so these move a
+   window over the whole retention period rather than over a slice that was
+   already fetched. */
+.hpager { display: flex; align-items: center; gap: 8px; }
+.hpager__btn {
+  width: 28px; height: 28px; border-radius: 6px; border: 1px solid #e0dedb; background: #fff;
+  color: #7a7a75; font-size: 16px; line-height: 1; cursor: pointer;
+}
+.hpager__btn:hover:not(:disabled) { background: #faf3e9; border-color: #edd7b6; color: #c9741a; }
+.hpager__btn:disabled { opacity: .4; cursor: default; }
+
+.btn:disabled, .btn-line--off { opacity: .5; cursor: not-allowed; pointer-events: none; }
+
+/* Toast. Bottom-right so it never covers the panel's action buttons, which is
+   where the operator is looking when one appears. */
+.toast {
+  position: fixed; right: 24px; bottom: 24px; z-index: 90; max-width: 420px;
+  background: #2c2c2c; color: #fff; font-size: 14px; line-height: 1.5;
+  padding: 13px 18px; border-radius: 9px; box-shadow: 0 14px 34px rgba(0,0,0,.26);
+}
+.toast--ok { background: #2f7a4f; }
+.toast--error { background: #a8452f; }

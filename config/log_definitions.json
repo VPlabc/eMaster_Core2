@@ -1,0 +1,155 @@
+{
+  "_comment": [
+    "Log type definitions for Log.Write(log_type, data) -- request/upgrade.md sections 8 and 10.",
+    "Each entry declares one log type and the fields it may carry. The gateway validates a",
+    "script's data table against this before inserting, so a typo in a field name is a Lua-side",
+    "error rather than a silently missing column in the Logs page.",
+    "",
+    "field.type is one of: string, integer, number, boolean.",
+    "field.required defaults to false; set it true for fields a row is meaningless without.",
+    "",
+    "Edits are picked up on gateway restart (types are upserted into config/logs.db). Removing a",
+    "type here does NOT delete it from the database -- existing entries keep their field list."
+  ],
+  "logs": [
+    {
+      "type": "card_issue",
+      "description": "Card issuing workflow",
+      "fields": [
+        { "name": "citizen_id", "type": "string", "required": true },
+        { "name": "employee_name", "type": "string" },
+        { "name": "card_uid", "type": "string" },
+        { "name": "machine_id", "type": "string" },
+        { "name": "result", "type": "string", "required": true },
+        { "name": "message", "type": "string" }
+      ]
+    },
+    {
+      "type": "citizen_verify",
+      "description": "Citizen ID card read and verified against the REST server",
+      "fields": [
+        { "name": "citizen_id", "type": "string", "required": true },
+        { "name": "full_name", "type": "string" },
+        { "name": "date_of_birth", "type": "string" },
+        { "name": "machine_id", "type": "string" },
+        { "name": "result", "type": "string", "required": true },
+        { "name": "message", "type": "string" }
+      ]
+    },
+    {
+      "type": "card_cancel",
+      "description": "An issuing attempt that was cancelled or timed out",
+      "fields": [
+        { "name": "citizen_id", "type": "string" },
+        { "name": "card_uid", "type": "string" },
+        { "name": "machine_id", "type": "string" },
+        { "name": "stage", "type": "string" },
+        { "name": "reason", "type": "string", "required": true }
+      ]
+    },
+    {
+      "type": "plc_error",
+      "description": "PLC / Modbus fault reported by a script",
+      "fields": [
+        { "name": "operation", "type": "string", "required": true },
+        { "name": "address", "type": "integer" },
+        { "name": "function_code", "type": "integer" },
+        { "name": "error", "type": "string", "required": true }
+      ]
+    },
+    {
+      "type": "system_event",
+      "description": "General gateway lifecycle event worth keeping",
+      "fields": [
+        { "name": "event", "type": "string", "required": true },
+        { "name": "machine_id", "type": "string" },
+        { "name": "detail", "type": "string" }
+      ]
+    },
+
+    {
+      "type": "locker_access",
+      "description": "SmartLocker: a card presented at a cabinet, and what was decided",
+      "fields": [
+        { "name": "event", "type": "string", "required": true },
+        { "name": "result", "type": "string", "required": true },
+        { "name": "reason", "type": "string" },
+        { "name": "card_code", "type": "string" },
+        { "name": "username", "type": "string" },
+        { "name": "locker_id", "type": "integer" },
+        { "name": "locker_number", "type": "integer" },
+        { "name": "locker_type", "type": "string" },
+        { "name": "block_id", "type": "integer" }
+      ]
+    },
+    {
+      "type": "locker_door",
+      "description": "SmartLocker: unlock pulses and door open/close transitions",
+      "fields": [
+        { "name": "event", "type": "string", "required": true },
+        { "name": "locker_id", "type": "integer" },
+        { "name": "locker_number", "type": "integer" },
+        { "name": "block_id", "type": "integer" },
+        { "name": "card_code", "type": "string" },
+        { "name": "duration_s", "type": "integer" }
+      ]
+    },
+    {
+      "type": "locker_assign",
+      "description": "SmartLocker: locker assigned, released, or refused for want of a free one",
+      "fields": [
+        { "name": "event", "type": "string", "required": true },
+        { "name": "card_code", "type": "string" },
+        { "name": "username", "type": "string" },
+        { "name": "locker_id", "type": "integer" },
+        { "name": "locker_number", "type": "integer" },
+        { "name": "locker_type", "type": "string" },
+        { "name": "block_id", "type": "integer" },
+        { "name": "reason", "type": "string" }
+      ]
+    },
+    {
+      "type": "locker_sync",
+      "description": "SmartLocker: daily REST reconciliation and RabbitMQ realtime updates",
+      "fields": [
+        { "name": "event", "type": "string", "required": true },
+        { "name": "source", "type": "string" },
+        { "name": "card_code", "type": "string" },
+        { "name": "added", "type": "integer" },
+        { "name": "updated", "type": "integer" },
+        { "name": "deactivated", "type": "integer" },
+        { "name": "assigned", "type": "integer" },
+        { "name": "released", "type": "integer" },
+        { "name": "errors", "type": "integer" },
+        { "name": "message", "type": "string" }
+      ]
+    },
+    {
+      "type": "locker_admin",
+      "description": "SmartLocker: admin card sequence, admin access mode, and overrides (CardScanPlan section 9)",
+      "fields": [
+        { "name": "event", "type": "string", "required": true },
+        { "name": "admin_card", "type": "string" },
+        { "name": "user_card", "type": "string" },
+        { "name": "locker_id", "type": "integer" },
+        { "name": "locker_number", "type": "integer" },
+        { "name": "scan_count", "type": "integer" },
+        { "name": "result", "type": "string" },
+        { "name": "reason", "type": "string" }
+      ]
+    },
+    {
+      "type": "locker_system",
+      "description": "SmartLocker: PLC, reader, locker faults and gateway lifecycle",
+      "fields": [
+        { "name": "event", "type": "string", "required": true },
+        { "name": "component", "type": "string" },
+        { "name": "detail", "type": "string" },
+        { "name": "reference", "type": "string" },
+        { "name": "message", "type": "string" },
+        { "name": "locker_id", "type": "integer" },
+        { "name": "card_code", "type": "string" }
+      ]
+    }
+  ]
+}

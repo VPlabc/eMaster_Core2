@@ -1,0 +1,169 @@
+{
+  "_comment": [
+    "Configuration template for the eMaster Gateway (request/release.md section 5).",
+    "",
+    "The gateway stores its live configuration in a SQLite database, config/config.db,",
+    "one row per section. On the FIRST start against a path with no database, if a",
+    "sibling <name>.json is found it is imported once to seed it -- so copying this",
+    "file to config/config.json is the supported way to preload settings:",
+    "",
+    "    cp config/config.example.json config/config.json",
+    "",
+    "After that first start, config.db is the source of truth and the JSON file is",
+    "ignored; edit settings from the web UI's Configuration page instead.",
+    "",
+    "config.db and config.json are both gitignored: they hold the REST API key, and",
+    "clients.db holds generated per-client card-reader keys. Never commit them.",
+    "",
+    "Replace every YOUR_* placeholder below before use."
+  ],
+
+  "system": {
+    "_comment": "Identity of this installation. Nothing in the C++ reads these -- they exist so scripts can ask for Config.Get(\"system.machine_id\") instead of hard-coding it.",
+    "machine_id": "GW001",
+    "device_name": "eMaster Gateway"
+  },
+
+  "web": {
+    "_comment": "Dashboard HTTP + WebSocket server. 0.0.0.0 listens on every interface; use 127.0.0.1 to restrict to the local machine. locker_ui_* is the SmartLocker floor plan (web/locker/), served on its OWN port so a kiosk or a firewall can be pointed at exactly one of the two UIs; it reads locker_db_path read-only and pushes state over a WebSocket at /ws.",
+    "bind_address": "0.0.0.0",
+    "port": 8080,
+    "locker_ui_enabled": false,
+    "locker_ui_port": 8081,
+    "locker_db_path": "smartlocker.db"
+  },
+
+  "rest": {
+    "_comment": "Upstream REST server the gateway reports to. api_key is sent as the API-Key header.",
+    "url": "http://YOUR_SERVER_HOST:8091",
+    "api_key": "YOUR_API_KEY",
+    "timeout_ms": 5000,
+    "retry_count": 3,
+    "ssl_enable": true
+  },
+
+  "serial": {
+    "_comment": "Citizen ID card reader. Windows: COM3. Linux: /dev/ttyUSB0. macOS: /dev/cu.usbserial-XXXX.",
+    "port": "YOUR_SERIAL_PORT",
+    "baudrate": 115200,
+    "data_bits": 8,
+    "stop_bits": 1,
+    "parity": "N"
+  },
+
+  "serial2": {
+    "_comment": "TDM-800 LED display (request/LEDBoard.md). Opened by led.lua, not at startup.",
+    "port": "YOUR_LED_SERIAL_PORT",
+    "baudrate": 9600,
+    "data_bits": 8,
+    "stop_bits": 1,
+    "parity": "N"
+  },
+
+  "modbus": {
+    "_comment": "Modbus TCP PLC. Coils (FC01/FC05) and discrete inputs (FC02) are SEPARATE address spaces -- see Modbus.RegisterInput's source argument in the Lua API docs if a dashboard input never changes.",
+    "ip": "YOUR_PLC_IP",
+    "port": 502,
+    "poll_interval_ms": 500,
+    "input_coil_start": 1024,
+    "input_coil_count": 4,
+    "output_coil_start": 1280,
+    "output_coil_count": 4,
+    "holding_register_start": 4096,
+    "holding_register_count": 16
+  },
+
+  "rfid": {
+    "_comment": "Card reader. mode is one of: tcp_json (JSON payload, reads the 'Raw' field), zk (ZKTeco PullSDK -- Windows x86 builds only), or disabled.",
+    "mode": "tcp_json",
+    "ip": "YOUR_RFID_IP",
+    "port": 9090,
+    "timeout_ms": 2000,
+    "reconnect_interval_ms": 3000
+  },
+
+  "zk": {
+    "_comment": "ZKTeco access controller the Lua workflow reads card UIDs from, via zk.connect(). Separate from `rfid` above because they are two different devices; nothing in the backend connects to this one. Read from Lua as Config.Get(\"zk.ip\").",
+    "ip": "YOUR_ZK_IP",
+    "port": 4370,
+    "timeout_ms": 2000,
+    "password": "",
+    "_comment_backend": "Which protocol reaches the panel. 'auto' uses the ZKTeco PullSDK DLL where it is compiled in (32-bit Windows only) and the panel's own C3 TCP protocol everywhere else -- so a Linux gateway gets working doors instead of NotSupportedOnThisPlatform. Force 'c3' on Windows too if you would rather not depend on the vendor DLL; 'pullsdk' fails anywhere the DLL cannot load.",
+    "backend": "auto"
+  },
+
+  "card_api": {
+    "_comment": "Master switch for POST /api/card/input. When false that endpoint returns 403 regardless of stored client keys. Manage per-client keys from Test Tools > Card Clients.",
+    "enabled": false
+  },
+
+  "lua": {
+    "_comment": "Startup script, relative to config/scripts/. Empty means no script runs at boot. Further scripts are started from the Lua Editor; several can run at once.",
+    "script_path": "main.lua"
+  },
+
+  "logging": {
+    "_comment": "Structured business logs written by Log.Write() into config/logs.db, searchable on the Logs page. The runtime log (Log.Info and friends) is a rotating file plus an in-memory buffer and needs no configuration. retention_days 0 keeps everything; pruning runs at startup. definitions_path is relative to this config directory.",
+    "store_enabled": true,
+    "retention_days": 90,
+    "definitions_path": "log_definitions.json"
+  },
+
+  "auth": {
+    "_comment": "API authentication, RBAC, brute-force lockout and rate limiting. Unlike every other feature switch here, `enabled` defaults TRUE -- an authentication system that has to be switched on protects nobody. Accounts live in config/security.db; on first start the gateway seeds one ADMIN and prints its one-time password to the console. Turning this off leaves every endpoint on the web port open to anyone who can reach it; see docs/security.md before you do. token_lifetime_sec is the bearer token lifetime, max_failed_attempts/lockout_seconds the per-account lockout, and the *_rate_per_sec/*_burst pairs are token buckets per source IP.",
+    "enabled": true,
+    "token_lifetime_sec": 1800,
+    "max_sessions_per_user": 10,
+    "max_failed_attempts": 5,
+    "lockout_seconds": 900,
+    "rate_limit_enabled": true,
+    "login_rate_per_sec": 0.2,
+    "login_burst": 10,
+    "api_rate_per_sec": 40,
+    "api_burst": 120,
+    "max_body_bytes": 65536,
+    "max_lua_body_bytes": 1048576,
+    "audit_log": true,
+    "audit_retention_days": 90,
+    "security_headers": true,
+    "allowed_origins": "",
+    "public_app_routes": false,
+    "protect_locker_ui": false
+  },
+
+  "plugins": {
+    "_comment": "Plugin configuration and desired startup state. Enable/Disable in Plugin Manager updates the enabled field. The database is outside the firmware release, so these choices survive software updates.",
+    "hsf.driver.modbus": {
+      "enabled": false,
+      "transport": { "type": "tcp", "host": "YOUR_MODBUS_IP", "port": 502, "timeout_ms": 3000 },
+      "unit_id": 1,
+      "timeout_ms": 2000,
+      "health_function": 1,
+      "health_address": 0
+    },
+    "hsf.driver.c3protocol": {
+      "enabled": false,
+      "transport": { "type": "tcp", "host": "YOUR_ZK_IP", "port": 4370, "timeout_ms": 2000 },
+      "timeout_ms": 2000,
+      "password": ""
+    }
+  },
+
+  "update": {
+    "_comment": "Over-the-air updates. Off by default -- turning it on is you choosing which release server this device trusts. The gateway polls `url` for a manifest and offers what it finds in a popup; nothing installs without a click. Packages are checked against the manifest SHA-256 and a detached signature over <version>\\n<platform>\\n<sha256>, and a release that fails to start is rolled back. Requires the managed layout scripts/install-ota.sh creates. See docs/ota-update.md.",
+    "enabled": false,
+    "url": "",
+    "channel": "stable",
+    "check_interval_hours": 6,
+    "initial_delay_sec": 30,
+    "require_signature": true,
+    "public_key_path": "update_public_key.pem",
+    "ssl_verify": true,
+    "timeout_sec": 30,
+    "install_root": "",
+    "health_confirm_sec": 120,
+    "max_boot_attempts": 2,
+    "keep_releases": 2,
+    "restart_command": ""
+  }
+}

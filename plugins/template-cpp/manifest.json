@@ -1,0 +1,24 @@
+{
+  "id": "hsf.driver.example",
+  "name": "Example Driver",
+  "version": "0.1.0",
+  "api_version": "1.0",
+  "description": "Describe the protocol this plugin speaks.",
+  "author": "Your Name",
+  "entry": "plugin.so",
+  "execution": "in_process",
+  "platforms": [
+    "linux-x86_64",
+    "linux-arm64",
+    "linux-armhf"
+  ],
+  "transports": [
+    "serial",
+    "tcp",
+    "mock"
+  ],
+  "permissions": [
+    "serial",
+    "network"
+  ]
+}

@@ -1,0 +1,25 @@
+{
+  "id": "hsf.example.hello",
+  "name": "HSF Hello Example",
+  "version": "1.0.0",
+  "api_version": "1.0",
+  "description": "Minimal driver plugin over a line protocol. Copy this to start a new plugin.",
+  "author": "HSF",
+  "entry": "plugin.so",
+  "execution": "in_process",
+  "platforms": [
+    "linux-x86_64",
+    "linux-arm64",
+    "linux-armhf",
+    "windows-x86_64"
+  ],
+  "transports": [
+    "serial",
+    "tcp",
+    "mock"
+  ],
+  "permissions": [
+    "serial",
+    "network"
+  ]
+}

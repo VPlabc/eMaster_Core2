@@ -1,0 +1,105 @@
+{
+  "info": {
+    "name": "eMaster Gateway - Card Reader Client API",
+    "description": "Test requests for POST /api/card/input and related Card Client endpoints. See request/Request/cardInputRESTAPI.md for the spec.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8080" },
+    { "key": "apiKey", "value": "9e28067d8baa73ab180a69dbc4c44365019cc9a9e7265c16b0baabdd8e4295a6" },
+    { "key": "cardData", "value": "04AABBCCDDEE" },
+    { "key": "position", "value": "1" }
+  ],
+  "item": [
+    {
+      "name": "Card Input - Valid Key (expect 200 Card Accepted)",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "API-Key", "value": "{{apiKey}}" }
+        ],
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            { "key": "CardData", "value": "{{cardData}}", "type": "text" },
+            { "key": "Position", "value": "{{position}}", "type": "text" }
+          ]
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/card/input",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "card", "input"]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Card Input - Invalid Key (expect 401)",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "API-Key", "value": "this-key-does-not-exist" }
+        ],
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            { "key": "CardData", "value": "{{cardData}}", "type": "text" },
+            { "key": "Position", "value": "{{position}}", "type": "text" }
+          ]
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/card/input",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "card", "input"]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Card Input - Missing Key (expect 401)",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            { "key": "CardData", "value": "{{cardData}}", "type": "text" },
+            { "key": "Position", "value": "{{position}}", "type": "text" }
+          ]
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/card/input",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "card", "input"]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "List Card Clients (check valid keys)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/card/clients",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "card", "clients"]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Get Card Cache (last accepted card)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/card/cache",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "card", "cache"]
+        }
+      },
+      "response": []
+    }
+  ]
+}

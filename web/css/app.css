@@ -1,0 +1,1244 @@
+/* eMaster Gateway design system.
+ *
+ * Every colour, shadow and radius lives here as a CSS variable -- components
+ * below and pages elsewhere reference the variables, never literal colours,
+ * so switching themes is a single attribute flip on <html> (see js/theme.js)
+ * rather than a per-component restyle.
+ *
+ * Themes ride on Bootstrap 5.3's own `data-bs-theme`, set alongside our
+ * `data-theme`, so Bootstrap's built-in components (dropdowns, modals,
+ * tables) recolour themselves instead of needing overrides here. */
+
+/* ---------------------------------------------------------------- *
+ * Light theme (default)
+ * ---------------------------------------------------------------- */
+:root,
+:root[data-theme="light"] {
+  --hsf-bg: #eef1f6;
+  --hsf-surface: #f7f9fc;
+  --hsf-surface-raised: #ffffff;
+  --hsf-surface-sunken: #e6eaf1;
+  --hsf-border: #d5dbe5;
+  --hsf-border-strong: #bcc5d3;
+
+  --hsf-text: #1c2430;
+  --hsf-text-muted: #5f6b7c;
+  --hsf-text-faint: #8a96a6;
+
+  --hsf-accent: #2563eb;
+  --hsf-accent-hover: #1d4ed8;
+  --hsf-accent-contrast: #ffffff;
+  --hsf-accent-soft: rgba(37, 99, 235, 0.10);
+
+  --hsf-ok: #16a34a;
+  --hsf-warn: #d97706;
+  --hsf-bad: #dc2626;
+  --hsf-idle: #94a3b8;
+  --hsf-busy: #2563eb;
+
+  /* Neumorphism = one light source, top-left. The raised pair is a dark
+     shadow bottom-right + a light highlight top-left; sunken is the same
+     two swapped and moved inside. Kept subtle on purpose -- heavy
+     neumorphism destroys contrast, and this runs on industrial panels. */
+  --hsf-shadow-raised:
+    4px 4px 10px rgba(31, 45, 66, 0.10),
+    -4px -4px 10px rgba(255, 255, 255, 0.90);
+  --hsf-shadow-raised-sm:
+    2px 2px 5px rgba(31, 45, 66, 0.10),
+    -2px -2px 5px rgba(255, 255, 255, 0.90);
+  --hsf-shadow-sunken:
+    inset 3px 3px 6px rgba(31, 45, 66, 0.11),
+    inset -3px -3px 6px rgba(255, 255, 255, 0.85);
+
+  --hsf-code-bg: #1e2430;
+  --hsf-code-text: #d4d4d4;
+
+  --hsf-radius: 0.65rem;
+  --hsf-radius-sm: 0.45rem;
+}
+
+/* ---------------------------------------------------------------- *
+ * Dark theme
+ * ---------------------------------------------------------------- */
+:root[data-theme="dark"] {
+  --hsf-bg: #171b22;
+  --hsf-surface: #1e242e;
+  --hsf-surface-raised: #232a35;
+  --hsf-surface-sunken: #161b23;
+  --hsf-border: #333c4a;
+  --hsf-border-strong: #47526480;
+
+  --hsf-text: #e6ebf2;
+  --hsf-text-muted: #9aa7b8;
+  --hsf-text-faint: #6b7889;
+
+  /* Lifted from the light accent: saturated blue on a dark field reads as
+     muddy, and low-glare is a stated requirement for this panel. */
+  --hsf-accent: #5b93ff;
+  --hsf-accent-hover: #7aa9ff;
+  --hsf-accent-contrast: #0f1620;
+  --hsf-accent-soft: rgba(91, 147, 255, 0.14);
+
+  --hsf-ok: #3ecf7a;
+  --hsf-warn: #f0a53c;
+  --hsf-bad: #ff6b6b;
+  --hsf-idle: #6b7889;
+  --hsf-busy: #5b93ff;
+
+  --hsf-shadow-raised:
+    4px 4px 10px rgba(0, 0, 0, 0.45),
+    -4px -4px 10px rgba(255, 255, 255, 0.035);
+  --hsf-shadow-raised-sm:
+    2px 2px 5px rgba(0, 0, 0, 0.45),
+    -2px -2px 5px rgba(255, 255, 255, 0.035);
+  --hsf-shadow-sunken:
+    inset 3px 3px 6px rgba(0, 0, 0, 0.50),
+    inset -3px -3px 6px rgba(255, 255, 255, 0.030);
+
+  --hsf-code-bg: #12161d;
+  --hsf-code-text: #d4d4d4;
+}
+
+/* ---------------------------------------------------------------- *
+ * Base
+ * ---------------------------------------------------------------- */
+body {
+  background-color: var(--hsf-bg);
+  color: var(--hsf-text);
+  /* Only colours transition. Transitioning `all` would also animate layout
+     on every theme flip, which stutters badly on embedded hardware. */
+  transition: background-color 0.18s ease, color 0.18s ease;
+}
+
+/* Pre-paint guard: js/theme.js sets data-theme in <head> before first paint,
+   but this suppresses the transition during that initial application so the
+   page never visibly animates from light to dark on load. */
+:root.hsf-theme-booting,
+:root.hsf-theme-booting * {
+  transition: none !important;
+}
+
+h1, h2, h3, h4, h5, h6 { color: var(--hsf-text); }
+
+a { color: var(--hsf-accent); }
+a:hover { color: var(--hsf-accent-hover); }
+
+code, kbd { color: var(--hsf-accent); }
+
+.text-muted { color: var(--hsf-text-muted) !important; }
+
+/* ---------------------------------------------------------------- *
+ * Navbar
+ * ---------------------------------------------------------------- */
+.hsf-navbar {
+  background: var(--hsf-surface-raised);
+  border-bottom: 1px solid var(--hsf-border);
+  box-shadow: 0 2px 10px rgba(31, 45, 66, 0.06);
+}
+:root[data-theme="dark"] .hsf-navbar {
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
+}
+
+.hsf-navbar .navbar-brand {
+  font-weight: 600;
+  color: var(--hsf-text);
+  letter-spacing: 0.01em;
+}
+.hsf-navbar .navbar-brand:hover { color: var(--hsf-accent); }
+
+.hsf-navbar .nav-link {
+  color: var(--hsf-text-muted);
+  font-size: 0.92rem;
+  padding: 0.4rem 0.8rem;
+  border-radius: var(--hsf-radius-sm);
+  transition: color 0.15s ease, background-color 0.15s ease;
+}
+.hsf-navbar .nav-link:hover {
+  color: var(--hsf-text);
+  background: var(--hsf-accent-soft);
+}
+.hsf-navbar .nav-link.active {
+  color: var(--hsf-accent);
+  background: var(--hsf-accent-soft);
+  font-weight: 600;
+}
+
+/* ---------------------------------------------------------------- *
+ * Cards / panels
+ * ---------------------------------------------------------------- */
+.card,
+.hsf-panel {
+  background: var(--hsf-surface-raised);
+  border: 1px solid var(--hsf-border);
+  border-radius: var(--hsf-radius);
+  box-shadow: var(--hsf-shadow-raised);
+  color: var(--hsf-text);
+}
+
+.card-header {
+  background: transparent;
+  border-bottom: 1px solid var(--hsf-border);
+  color: var(--hsf-text);
+  font-weight: 600;
+}
+
+.hsf-panel-title {
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--hsf-text-muted);
+  margin-bottom: 0.9rem;
+}
+
+.stat-card {
+  /* Equal height regardless of whether the value wraps -- "32161 / 65281 MB"
+     is two lines where "41" is one, and without this the row is ragged. */
+  height: 100%;
+}
+.stat-card .stat-value {
+  font-size: 1.35rem;
+  font-weight: 600;
+  color: var(--hsf-text);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+@media (min-width: 1400px) {
+  .stat-card .stat-value { font-size: 1.5rem; }
+}
+.stat-card .stat-label {
+  color: var(--hsf-text-muted);
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* ---------------------------------------------------------------- *
+ * Buttons -- raised at rest, pressed-in on :active
+ * ---------------------------------------------------------------- */
+.btn {
+  border-radius: var(--hsf-radius-sm);
+  font-weight: 500;
+  transition: box-shadow 0.12s ease, background-color 0.15s ease, color 0.15s ease;
+}
+
+.btn-primary {
+  background: var(--hsf-accent);
+  border-color: var(--hsf-accent);
+  color: var(--hsf-accent-contrast);
+  box-shadow: var(--hsf-shadow-raised-sm);
+}
+.btn-primary:hover {
+  background: var(--hsf-accent-hover);
+  border-color: var(--hsf-accent-hover);
+  color: var(--hsf-accent-contrast);
+}
+
+.btn-secondary,
+.btn-outline-secondary,
+.btn-light {
+  background: var(--hsf-surface-raised);
+  border-color: var(--hsf-border);
+  color: var(--hsf-text);
+  box-shadow: var(--hsf-shadow-raised-sm);
+}
+.btn-secondary:hover,
+.btn-outline-secondary:hover,
+.btn-light:hover {
+  background: var(--hsf-surface);
+  border-color: var(--hsf-border-strong);
+  color: var(--hsf-text);
+}
+
+.btn-success { background: var(--hsf-ok); border-color: var(--hsf-ok); color: #fff; box-shadow: var(--hsf-shadow-raised-sm); }
+.btn-danger  { background: var(--hsf-bad); border-color: var(--hsf-bad); color: #fff; box-shadow: var(--hsf-shadow-raised-sm); }
+.btn-warning { background: var(--hsf-warn); border-color: var(--hsf-warn); color: #fff; box-shadow: var(--hsf-shadow-raised-sm); }
+
+/* The press itself: shadow flips outset -> inset, so the control physically
+   sinks. This is the whole point of the neumorphic treatment -- feedback
+   without a colour change, which matters on a panel viewed at an angle. */
+.btn:active:not(:disabled) {
+  box-shadow: var(--hsf-shadow-sunken);
+  transform: translateY(0.5px);
+}
+
+.btn:disabled,
+.btn.disabled {
+  box-shadow: none;
+  opacity: 0.5;
+}
+
+.btn:focus-visible {
+  outline: 2px solid var(--hsf-accent);
+  outline-offset: 2px;
+  box-shadow: none;
+}
+
+/* ---------------------------------------------------------------- *
+ * Inputs -- recessed, the inverse of buttons
+ * ---------------------------------------------------------------- */
+.form-control,
+.form-select {
+  background: var(--hsf-surface-sunken);
+  border: 1px solid var(--hsf-border);
+  border-radius: var(--hsf-radius-sm);
+  color: var(--hsf-text);
+  box-shadow: var(--hsf-shadow-sunken);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.form-control:focus,
+.form-select:focus {
+  background: var(--hsf-surface-sunken);
+  border-color: var(--hsf-accent);
+  color: var(--hsf-text);
+  box-shadow: var(--hsf-shadow-sunken), 0 0 0 3px var(--hsf-accent-soft);
+}
+.form-control::placeholder { color: var(--hsf-text-faint); }
+.form-control:disabled,
+.form-select:disabled {
+  background: var(--hsf-surface);
+  color: var(--hsf-text-faint);
+  box-shadow: none;
+}
+
+.form-label {
+  color: var(--hsf-text-muted);
+  font-size: 0.85rem;
+  font-weight: 500;
+  margin-bottom: 0.3rem;
+}
+
+.input-group-text {
+  background: var(--hsf-surface);
+  border-color: var(--hsf-border);
+  color: var(--hsf-text-muted);
+}
+
+.form-check-input {
+  background-color: var(--hsf-surface-sunken);
+  border-color: var(--hsf-border-strong);
+}
+.form-check-input:checked {
+  background-color: var(--hsf-accent);
+  border-color: var(--hsf-accent);
+}
+
+/* ---------------------------------------------------------------- *
+ * Tables
+ * ---------------------------------------------------------------- */
+.table {
+  --bs-table-bg: transparent;
+  --bs-table-color: var(--hsf-text);
+  --bs-table-border-color: var(--hsf-border);
+  --bs-table-striped-bg: var(--hsf-surface);
+  --bs-table-striped-color: var(--hsf-text);
+  --bs-table-hover-bg: var(--hsf-accent-soft);
+  --bs-table-hover-color: var(--hsf-text);
+  color: var(--hsf-text);
+}
+.table > thead th {
+  color: var(--hsf-text-muted);
+  font-size: 0.76rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-bottom: 1px solid var(--hsf-border);
+}
+
+.hsf-table-sunken {
+  background: var(--hsf-surface-sunken);
+  border-radius: var(--hsf-radius-sm);
+  box-shadow: var(--hsf-shadow-sunken);
+  padding: 0.5rem;
+}
+
+#variablesTable td, #logsTable td {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.85rem;
+}
+
+/* ---------------------------------------------------------------- *
+ * Tabs
+ * ---------------------------------------------------------------- */
+.nav-tabs {
+  border-bottom: 1px solid var(--hsf-border);
+  gap: 0.25rem;
+}
+.nav-tabs .nav-link {
+  color: var(--hsf-text-muted);
+  border: 1px solid transparent;
+  border-radius: var(--hsf-radius-sm) var(--hsf-radius-sm) 0 0;
+}
+.nav-tabs .nav-link:hover {
+  color: var(--hsf-text);
+  background: var(--hsf-accent-soft);
+  border-color: transparent;
+}
+.nav-tabs .nav-link.active {
+  color: var(--hsf-accent);
+  background: var(--hsf-surface-raised);
+  border-color: var(--hsf-border) var(--hsf-border) var(--hsf-surface-raised);
+  font-weight: 600;
+}
+
+.nav-pills .nav-link { color: var(--hsf-text-muted); border-radius: var(--hsf-radius-sm); }
+.nav-pills .nav-link.active {
+  background: var(--hsf-accent);
+  color: var(--hsf-accent-contrast);
+  box-shadow: var(--hsf-shadow-raised-sm);
+}
+
+/* ---------------------------------------------------------------- *
+ * Status dots + LED indicator
+ * ---------------------------------------------------------------- */
+.status-dot {
+  display: inline-block;
+  width: 0.6rem;
+  height: 0.6rem;
+  border-radius: 50%;
+  margin-right: 0.4rem;
+  background-color: var(--hsf-idle);
+  vertical-align: middle;
+}
+.status-dot.ok   { background-color: var(--hsf-ok);   box-shadow: 0 0 6px var(--hsf-ok); }
+.status-dot.bad  { background-color: var(--hsf-bad);  box-shadow: 0 0 6px var(--hsf-bad); }
+.status-dot.warn { background-color: var(--hsf-warn); box-shadow: 0 0 6px var(--hsf-warn); }
+.status-dot.busy { background-color: var(--hsf-busy); box-shadow: 0 0 6px var(--hsf-busy); }
+
+/* The LED panel component: a glowing *border*, per the spec. Glow strength
+   is deliberately capped -- the text inside has to stay readable, so the
+   colour is carried by the border and a soft outer halo, never by washing
+   the fill. */
+.hsf-led {
+  --led-color: var(--hsf-idle);
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.7rem 0.9rem;
+  border-radius: var(--hsf-radius-sm);
+  background: var(--hsf-surface-raised);
+  border: 1.5px solid var(--led-color);
+  box-shadow: 0 0 10px -1px var(--led-color), inset 0 0 12px -8px var(--led-color);
+  color: var(--hsf-text);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.hsf-led::before {
+  content: "";
+  width: 0.7rem;
+  height: 0.7rem;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: var(--led-color);
+  box-shadow: 0 0 8px var(--led-color);
+}
+.hsf-led-label {
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--hsf-text-muted);
+}
+/* Value and its timestamp stack on the right so the row stays one line tall
+   and the times align down the column. */
+.hsf-led-right {
+  margin-left: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  line-height: 1.2;
+}
+.hsf-led-value { font-weight: 600; }
+.hsf-led-meta {
+  font-size: 0.68rem;
+  color: var(--hsf-text-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.hsf-led.is-online       { --led-color: var(--hsf-ok); }
+.hsf-led.is-warning      { --led-color: var(--hsf-warn); }
+.hsf-led.is-error        { --led-color: var(--hsf-bad); }
+.hsf-led.is-disconnected { --led-color: var(--hsf-idle); }
+.hsf-led.is-processing   { --led-color: var(--hsf-busy); animation: hsf-led-pulse 1.6s ease-in-out infinite; }
+
+@keyframes hsf-led-pulse {
+  0%, 100% { box-shadow: 0 0 10px -1px var(--led-color), inset 0 0 12px -8px var(--led-color); }
+  50%      { box-shadow: 0 0 16px 1px var(--led-color), inset 0 0 12px -6px var(--led-color); }
+}
+
+/* Someone watching a pulsing panel all shift didn't opt into that. */
+@media (prefers-reduced-motion: reduce) {
+  .hsf-led.is-processing { animation: none; }
+  * { transition-duration: 0.01ms !important; }
+}
+
+/* ---------------------------------------------------------------- *
+ * PLC I/O rows
+ * ---------------------------------------------------------------- */
+.hsf-io-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.55rem 0.75rem;
+  border-radius: var(--hsf-radius-sm);
+  background: var(--hsf-surface-sunken);
+  box-shadow: var(--hsf-shadow-sunken);
+}
+
+.hsf-io-name {
+  font-weight: 500;
+  color: var(--hsf-text);
+}
+
+.hsf-io-addr {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.75rem;
+  color: var(--hsf-text-faint);
+}
+
+/* Which Modbus address space produced an input's value. Quiet by design --
+   it only matters when a point is stuck, and then it is the first clue. */
+.hsf-io-fc {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.65rem;
+  padding: 0.05rem 0.3rem;
+  border-radius: 0.25rem;
+  border: 1px solid var(--hsf-border);
+  color: var(--hsf-text-faint);
+  cursor: help;
+}
+
+/* PLC Registers table */
+.hsf-reg-table th {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--hsf-text-muted);
+  font-weight: 600;
+}
+/* Scoped through .hsf-reg-table: Bootstrap sets a colour on every table cell
+   via `.table > :not(caption) > * > *`, which out-specifies a bare class. */
+.hsf-reg-table .hsf-reg-raw {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.75rem;
+  color: var(--hsf-text-faint);
+  white-space: nowrap;
+}
+.hsf-reg-table .hsf-reg-value {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-weight: 600;
+  color: var(--hsf-text);
+  white-space: nowrap;
+}
+/* A read that is currently failing: last known value stays visible but reads
+   as stale rather than live. */
+.hsf-reg-stale .hsf-reg-value,
+.hsf-reg-stale .hsf-reg-raw {
+  opacity: 0.45;
+  text-decoration: line-through;
+}
+.hsf-reg-write { width: 11rem; }
+
+.hsf-io-state {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+.hsf-io-dot {
+  width: 0.65rem;
+  height: 0.65rem;
+  border-radius: 50%;
+  background: var(--hsf-idle);
+}
+.hsf-io-row.is-on  .hsf-io-dot { background: var(--hsf-ok);  box-shadow: 0 0 7px var(--hsf-ok); }
+.hsf-io-row.is-on  .hsf-io-state { color: var(--hsf-ok); }
+.hsf-io-row.is-off .hsf-io-dot { background: var(--hsf-idle); }
+.hsf-io-row.is-off .hsf-io-state { color: var(--hsf-text-muted); }
+/* Never polled yet -- distinct from a confident OFF. */
+.hsf-io-row.is-unknown .hsf-io-dot { background: var(--hsf-warn); opacity: 0.55; }
+.hsf-io-row.is-unknown .hsf-io-state { color: var(--hsf-text-faint); }
+
+.hsf-io-empty {
+  color: var(--hsf-text-muted);
+  font-size: 0.85rem;
+  padding: 0.5rem 0.15rem;
+}
+.hsf-io-empty code { font-size: 0.8rem; }
+
+.hsf-runtime-error {
+  background: var(--hsf-surface-sunken);
+  box-shadow: var(--hsf-shadow-sunken);
+  border-radius: var(--hsf-radius-sm);
+  padding: 0.6rem 0.75rem;
+  color: var(--hsf-bad);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.8rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+#luaRuntimeTable td { font-variant-numeric: tabular-nums; vertical-align: middle; }
+
+/* ---------------------------------------------------------------- *
+ * Badges
+ * ---------------------------------------------------------------- */
+.hsf-badge {
+  display: inline-block;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.hsf-badge-ok   { background: rgba(22, 163, 74, 0.15);  color: var(--hsf-ok); }
+.hsf-badge-warn { background: rgba(217, 119, 6, 0.15);  color: var(--hsf-warn); }
+.hsf-badge-bad  { background: rgba(220, 38, 38, 0.15);  color: var(--hsf-bad); }
+.hsf-badge-idle { background: var(--hsf-accent-soft);   color: var(--hsf-text-muted); }
+
+/* ---------------------------------------------------------------- *
+ * Theme toggle
+ * ---------------------------------------------------------------- */
+.hsf-theme-toggle {
+  background: var(--hsf-surface-raised);
+  border: 1px solid var(--hsf-border);
+  border-radius: var(--hsf-radius-sm);
+  box-shadow: var(--hsf-shadow-raised-sm);
+  color: var(--hsf-text-muted);
+  cursor: pointer;
+  line-height: 1;
+  padding: 0.4rem 0.6rem;
+  font-size: 1rem;
+  transition: color 0.15s ease, box-shadow 0.12s ease;
+}
+.hsf-theme-toggle:hover { color: var(--hsf-accent); }
+.hsf-theme-toggle:active { box-shadow: var(--hsf-shadow-sunken); }
+
+/* One button, two glyphs -- show whichever represents the *other* theme, so
+   the icon reads as "click for this" rather than "you are here". */
+.hsf-theme-toggle .icon-dark  { display: none; }
+:root[data-theme="dark"] .hsf-theme-toggle .icon-dark  { display: inline; }
+:root[data-theme="dark"] .hsf-theme-toggle .icon-light { display: none; }
+
+/* ---------------------------------------------------------------- *
+ * Lua Editor -- full-height layout (updateUI.md sections 16-17)
+ * ---------------------------------------------------------------- */
+
+/* The shell claims everything below the sticky navbar. dvh where supported
+   so a mobile browser's collapsing address bar doesn't leave the editor
+   overflowing; vh is the fallback. */
+.hsf-editor-shell {
+  display: flex;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  height: calc(100vh - 60px);
+  height: calc(100dvh - 60px);
+  align-items: stretch;
+  min-height: 0;
+}
+
+.hsf-editor-tree {
+  flex: 0 0 16rem;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;   /* lets the inner scroller shrink instead of pushing out */
+  overflow: hidden;
+}
+
+.hsf-editor-main {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  min-width: 0;
+  min-height: 0;
+}
+
+.hsf-editor-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  flex: 0 0 auto;
+}
+.hsf-editor-toolbar #currentScriptLabel { max-width: 18rem; }
+
+/* The editor takes whatever the toolbar and log don't. flex:1 with
+   min-height:0 is what actually makes it grow -- the textarea has an
+   intrinsic height that would otherwise win. */
+.hsf-editor-surface {
+  flex: 1 1 auto;
+  min-height: 12rem;
+  margin-bottom: 0;
+}
+/* Two classes on purpose: the generic `.editor-wrap textarea { height: 420px }`
+   below is declared later in this file with equal specificity and would
+   otherwise win, pinning the editor back to a fixed box. */
+.editor-wrap.hsf-editor-surface textarea,
+.editor-wrap.hsf-editor-surface pre {
+  height: 100%;
+}
+
+.hsf-editor-log {
+  flex: 0 0 auto;
+}
+.hsf-editor-log #errorConsole {
+  max-height: 9rem;
+  min-height: 4rem;
+}
+
+/* Stack on small screens -- a 16rem tree beside an editor is unusable on a
+   tablet, and fixed viewport height fights the on-screen keyboard. */
+@media (max-width: 767.98px) {
+  .hsf-editor-shell {
+    flex-direction: column;
+    height: auto;
+  }
+  .hsf-editor-tree { flex: 0 0 auto; max-height: 40vh; }
+  .hsf-editor-surface { min-height: 55vh; }
+}
+
+/* ---------------------------------------------------------------- *
+ * Script tree
+ * ---------------------------------------------------------------- */
+.hsf-tree {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 0.35rem;
+  font-size: 0.85rem;
+}
+
+.hsf-tree-folder > summary {
+  list-style: none;
+  cursor: pointer;
+  padding: 0.25rem 0.4rem;
+  border-radius: var(--hsf-radius-sm);
+  color: var(--hsf-text-muted);
+  font-weight: 600;
+  user-select: none;
+}
+.hsf-tree-folder > summary::-webkit-details-marker { display: none; }
+.hsf-tree-folder > summary:hover { background: var(--hsf-accent-soft); color: var(--hsf-text); }
+.hsf-tree-folder > summary::before {
+  content: "\25B8";           /* collapsed caret */
+  display: inline-block;
+  width: 1em;
+  transition: transform 0.15s ease;
+}
+.hsf-tree-folder[open] > summary::before { transform: rotate(90deg); }
+
+.hsf-tree-children { padding-left: 0.75rem; }
+
+.hsf-tree-file {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.25rem 0.4rem;
+  border-radius: var(--hsf-radius-sm);
+  cursor: pointer;
+  color: var(--hsf-text);
+}
+.hsf-tree-file:hover { background: var(--hsf-accent-soft); }
+.hsf-tree-file.active {
+  background: var(--hsf-accent);
+  color: var(--hsf-accent-contrast);
+}
+.hsf-tree-file.active .hsf-tree-actions .btn { color: var(--hsf-accent-contrast); }
+
+.hsf-tree-name {
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Marks the auto-run-on-startup script. */
+.hsf-tree-star {
+  flex: 0 0 auto;
+  font-size: 0.75rem;
+  opacity: 0.85;
+}
+
+.hsf-tree-actions {
+  flex: 0 0 auto;
+  display: none;
+  gap: 0.15rem;
+}
+.hsf-tree-file:hover .hsf-tree-actions,
+.hsf-tree-file.active .hsf-tree-actions { display: flex; }
+.hsf-tree-actions .btn {
+  padding: 0 0.3rem;
+  font-size: 0.75rem;
+  line-height: 1.4;
+  border: none;
+  background: transparent;
+  box-shadow: none;
+  color: var(--hsf-text-muted);
+}
+.hsf-tree-actions .btn:hover { color: var(--hsf-accent); background: transparent; }
+
+/* ---------------------------------------------------------------- *
+ * Code editor / console
+ * ---------------------------------------------------------------- */
+.editor-wrap {
+  position: relative;
+  border: 1px solid var(--hsf-border);
+  border-radius: var(--hsf-radius-sm);
+  overflow: hidden;
+  background: var(--hsf-code-bg);
+  box-shadow: var(--hsf-shadow-sunken);
+}
+.editor-wrap textarea,
+.editor-wrap pre {
+  margin: 0;
+  padding: 1rem;
+  width: 100%;
+  height: 420px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  white-space: pre;
+  overflow: auto;
+  box-sizing: border-box;
+}
+.editor-wrap pre {
+  position: absolute;
+  top: 0;
+  left: 0;
+  color: var(--hsf-code-text);
+  pointer-events: none;
+}
+.editor-wrap textarea {
+  position: relative;
+  background: transparent;
+  color: transparent;
+  caret-color: #ffffff;
+  resize: none;
+  border: none;
+  outline: none;
+}
+.lua-kw { color: #569cd6; }
+.lua-str { color: #ce9178; }
+.lua-com { color: #6a9955; }
+.lua-num { color: #b5cea8; }
+.lua-fn { color: #dcdcaa; }
+
+#errorConsole {
+  background: var(--hsf-code-bg);
+  color: var(--hsf-bad);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.85rem;
+  min-height: 4rem;
+  max-height: 10rem;
+  overflow-y: auto;
+  padding: 0.75rem;
+  border-radius: var(--hsf-radius-sm);
+  box-shadow: var(--hsf-shadow-sunken);
+}
+
+.api-doc-block {
+  border-left: 3px solid var(--hsf-accent);
+  padding-left: 1rem;
+  margin-bottom: 2rem;
+}
+.api-doc-block h5 code { font-size: 1rem; }
+.api-doc-block pre {
+  background: var(--hsf-surface-sunken);
+  color: var(--hsf-text);
+  padding: 0.75rem;
+  border-radius: var(--hsf-radius-sm);
+  overflow-x: auto;
+}
+
+/* ---------------------------------------------------------------- *
+ * Charts -- the spec calls out the old height as too short
+ * ---------------------------------------------------------------- */
+.hsf-chart-wrap {
+  position: relative;
+  height: 340px;
+}
+@media (max-width: 991.98px) { .hsf-chart-wrap { height: 300px; } }
+@media (max-width: 575.98px) { .hsf-chart-wrap { height: 240px; } }
+
+/* ---------------------------------------------------------------- *
+ * Scrollable regions (log viewer, file trees)
+ * ---------------------------------------------------------------- */
+.hsf-scroll {
+  overflow-y: auto;
+  overflow-x: auto;
+  background: var(--hsf-surface-sunken);
+  border-radius: var(--hsf-radius-sm);
+  box-shadow: var(--hsf-shadow-sunken);
+}
+.hsf-scroll::-webkit-scrollbar { width: 10px; height: 10px; }
+.hsf-scroll::-webkit-scrollbar-track { background: transparent; }
+.hsf-scroll::-webkit-scrollbar-thumb {
+  background: var(--hsf-border-strong);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+.hsf-scroll::-webkit-scrollbar-thumb:hover { background: var(--hsf-text-faint); background-clip: content-box; }
+
+/* ---------------------------------------------------------------- *
+ * Log viewer (updateUI.md section 23)
+ * ---------------------------------------------------------------- */
+
+/* Claims the viewport below the navbar and never grows past it, so the page
+   itself never scrolls -- the log list scrolls inside its own box. */
+.hsf-logs-shell {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  padding: 0.75rem;
+  height: calc(100vh - 60px);
+  height: calc(100dvh - 60px);
+  min-height: 0;
+}
+
+.hsf-logs-toolbar { flex: 0 0 auto; }
+
+.hsf-logs-body {
+  flex: 1 1 auto;
+  min-height: 0;   /* without this the table's height wins and the page grows */
+  padding: 0;
+}
+
+/* Header stays put while the body scrolls under it. */
+.hsf-logs-body thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--hsf-surface);
+  backdrop-filter: blur(2px);
+}
+
+#logsTable td {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.78rem;
+  vertical-align: top;
+}
+.hsf-log-time { white-space: nowrap; color: var(--hsf-text-muted); }
+/* Wraps rather than forcing a horizontal scrollbar for one long line --
+   stack traces and device payloads get long. */
+.hsf-log-msg { word-break: break-word; }
+
+.hsf-log-error { color: var(--hsf-bad); font-weight: 600; }
+.hsf-log-warn  { color: var(--hsf-warn); font-weight: 600; }
+.hsf-log-debug { color: var(--hsf-text-faint); }
+
+/* Two-pane Logs page (upgrade.md section 12). The tab strip is fixed height
+   and the active pane takes the rest, so each pane's own scroller -- the
+   runtime tail, the structured results -- is what scrolls rather than the page.
+   Only .active is flexed: a hidden pane must stay display:none, which is why
+   this is a stylesheet rule and not Bootstrap's !important d-flex utility. */
+.hsf-logs-tabs {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.hsf-logs-tabs > .tab-pane.active {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* Structured log results (upgrade.md sections 15-16). Same sticky-header
+   treatment as the runtime tail: the pager sits above the table, so losing the
+   column headings while scrolling a page of 200 rows would leave the dynamic
+   columns unlabelled. */
+#sTable thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--hsf-surface);
+  white-space: nowrap;
+}
+#sTable td {
+  font-size: 0.8rem;
+  vertical-align: top;
+}
+#sTable tbody tr:hover { background: var(--hsf-accent-soft); }
+
+@media (max-width: 767.98px) {
+  .hsf-logs-shell { height: auto; }
+  .hsf-logs-body { max-height: 65vh; }
+  /* The detail panel drops under the results instead of squeezing them into a
+     column too narrow to read. */
+  #sDetail { width: 100% !important; }
+}
+
+/* ---------------------------------------------------------------- *
+ * Role-based visibility (js/auth.js sets data-role on <html>)
+ * ---------------------------------------------------------------- */
+:root:not([data-role="admin"]) [data-requires-role="admin"] { display: none !important; }
+
+/* ---------------------------------------------------------------- *
+ * Login page
+ * ---------------------------------------------------------------- */
+.hsf-login-wrap {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+}
+
+.hsf-login-card {
+  width: 100%;
+  max-width: 24rem;
+}
+
+.hsf-login-theme {
+  position: fixed;
+  top: 1rem;
+  right: 1rem;
+  z-index: 10;
+}
+
+.hsf-login-mark {
+  width: 3.25rem;
+  height: 3.25rem;
+  margin: 0 auto 0.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--hsf-radius);
+  background: var(--hsf-accent);
+  color: var(--hsf-accent-contrast);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  box-shadow: var(--hsf-shadow-raised);
+}
+
+.hsf-login-hint {
+  background: var(--hsf-surface-sunken);
+  border-radius: var(--hsf-radius-sm);
+  box-shadow: var(--hsf-shadow-sunken);
+  padding: 0.7rem 0.85rem;
+  font-size: 0.8rem;
+  color: var(--hsf-text-muted);
+}
+.hsf-login-hint code { color: var(--hsf-accent); }
+
+/* Bootstrap's .alert ships fixed light-mode colours, which are unreadable
+   on the dark surface. */
+.alert-danger {
+  background: rgba(220, 38, 38, 0.12);
+  border-color: var(--hsf-bad);
+  color: var(--hsf-bad);
+}
+.alert-success {
+  background: rgba(22, 163, 74, 0.12);
+  border-color: var(--hsf-ok);
+  color: var(--hsf-ok);
+}
+.alert-warning {
+  background: rgba(217, 119, 6, 0.12);
+  border-color: var(--hsf-warn);
+  color: var(--hsf-warn);
+}
+
+/* ---------------------------------------------------------------- *
+ * Test Tools
+ * ---------------------------------------------------------------- */
+.hsf-tool-rail {
+  background: var(--hsf-surface);
+  border: 1px solid var(--hsf-border);
+  border-radius: var(--hsf-radius);
+  padding: 0.4rem;
+  box-shadow: var(--hsf-shadow-raised-sm);
+  /* Sticks alongside a long result pane on wide screens; static below the
+     lg breakpoint, where the rail stacks above the panel anyway. */
+  position: sticky;
+  top: 1rem;
+}
+.hsf-tool-rail .nav-link {
+  text-align: left;
+  color: var(--hsf-text-muted);
+  font-size: 0.88rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: calc(var(--hsf-radius) - 4px);
+}
+.hsf-tool-rail .nav-link:hover { background: var(--hsf-accent-soft); color: var(--hsf-text); }
+.hsf-tool-rail .nav-link.active { background: var(--hsf-accent); color: #fff; }
+
+/* Response panes: fixed max height so a 5 MB JSON body scrolls inside its own
+   box instead of pushing the controls off screen. */
+.hsf-tool-output {
+  background: var(--hsf-surface-sunken);
+  color: var(--hsf-text);
+  border: 1px solid var(--hsf-border);
+  border-radius: calc(var(--hsf-radius) - 4px);
+  padding: 0.75rem;
+  font-size: 0.8rem;
+  line-height: 1.45;
+  max-height: 22rem;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.hsf-tools .tab-content > .tab-pane > .card { margin-bottom: 0; }
+
+/* Bit chips for Modbus block reads. */
+.hsf-io-chip {
+  font-family: var(--bs-font-monospace, monospace);
+  font-size: 0.75rem;
+  padding: 0.2rem 0.5rem;
+  border-radius: 999px;
+  border: 1px solid var(--hsf-border);
+  background: var(--hsf-surface-sunken);
+  color: var(--hsf-text-muted);
+}
+.hsf-io-chip.hsf-io-on {
+  background: rgba(22, 163, 74, 0.15);
+  border-color: var(--hsf-ok);
+  color: var(--hsf-ok);
+  font-weight: 600;
+}
+
+/* ---------------------------------------------------------------- *
+ * Responsive
+ * ---------------------------------------------------------------- */
+@media (max-width: 991.98px) {
+  /* Stacked above the panel -- sticky would park it over the content. */
+  .hsf-tool-rail { position: static; }
+  .hsf-tool-rail { flex-direction: row !important; flex-wrap: wrap; }
+  .hsf-tool-rail .nav-link { flex: 1 1 auto; text-align: center; }
+}
+
+@media (max-width: 767.98px) {
+  .stat-card .stat-value { font-size: 1.3rem; }
+  .hsf-navbar .navbar-nav { flex-direction: row; flex-wrap: wrap; gap: 0.15rem; }
+  .hsf-navbar .nav-link { padding: 0.35rem 0.55rem; font-size: 0.85rem; }
+  .container-fluid { padding-left: 0.75rem; padding-right: 0.75rem; }
+}
+
+/* ---------------------------------------------------------------- *
+ * Software update toast (web/js/update.js, request/CICD.md section 4)
+ *
+ * Bottom-right corner, 360px, never a full-screen modal: the gateway can be
+ * mid-transaction with someone standing at the cabinet, and a dialog covering
+ * the whole UI would sit between an operator and a door they are trying to
+ * open. Everything below is expressed in the theme tokens above so it follows
+ * light/dark with the rest of the chrome.
+ * ---------------------------------------------------------------- */
+.hsf-update-toast {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  width: 360px;
+  max-width: calc(100vw - 40px);
+  z-index: 1080;              /* over Bootstrap's sticky navbar (1020) */
+  padding: 1rem 1.1rem;
+  border: 1px solid var(--hsf-border);
+  border-radius: var(--hsf-radius);
+  background: var(--hsf-surface-raised);
+  color: var(--hsf-text);
+  box-shadow: var(--hsf-shadow-raised);
+}
+
+.hsf-update-toast[hidden] { display: none; }
+
+.hsf-update-toast.mandatory { border-color: var(--hsf-warn); }
+.hsf-update-toast.error { border-color: var(--hsf-bad); }
+
+.hsf-update-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.hsf-update-title {
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.hsf-update-close {
+  border: 0;
+  background: none;
+  color: var(--hsf-text-faint);
+  font-size: 1.25rem;
+  line-height: 1;
+  padding: 0 0.15rem;
+  cursor: pointer;
+}
+.hsf-update-close:hover { color: var(--hsf-text); }
+
+.hsf-update-version {
+  margin-top: 0.35rem;
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+
+.hsf-update-current {
+  margin-top: 0.15rem;
+  font-size: 0.82rem;
+  color: var(--hsf-text-muted);
+}
+
+.hsf-update-notes {
+  margin: 0.6rem 0 0;
+  padding-left: 1.1rem;
+  font-size: 0.82rem;
+  color: var(--hsf-text-muted);
+}
+.hsf-update-notes li { margin-bottom: 0.15rem; }
+
+.hsf-update-note {
+  margin: 0.6rem 0 0;
+  font-size: 0.8rem;
+  color: var(--hsf-text-muted);
+}
+.hsf-update-warn { color: var(--hsf-warn); font-weight: 600; }
+
+.hsf-update-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 0.9rem;
+}
+
+.hsf-update-track {
+  margin-top: 0.7rem;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--hsf-surface-sunken);
+  overflow: hidden;
+}
+
+.hsf-update-bar {
+  height: 100%;
+  width: 0;
+  border-radius: 999px;
+  background: var(--hsf-accent);
+  transition: width 0.3s ease;
+}
+
+/* No Content-Length, or a stage with no measurable progress (verify, install):
+   a bar parked at 0% reads as "hung", which is the opposite of the truth. */
+.hsf-update-bar.indeterminate {
+  width: 35%;
+  animation: hsf-update-slide 1.4s ease-in-out infinite;
+}
+
+@keyframes hsf-update-slide {
+  0%   { margin-left: -35%; }
+  100% { margin-left: 100%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hsf-update-bar.indeterminate { animation: none; width: 100%; opacity: 0.5; }
+  .hsf-update-bar { transition: none; }
+}
+
+@media (max-width: 575.98px) {
+  .hsf-update-toast { right: 10px; left: 10px; bottom: 10px; width: auto; }
+}

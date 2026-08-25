@@ -1,0 +1,485 @@
+{
+  "info": {
+    "name": "eMaster Gateway - SmartLocker API",
+    "description": "The SmartLocker application's HTTP surface, which comes in two halves that answer on DIFFERENT PORTS.\n\n1. SCRIPT API — {{gatewayUrl}}/api/app/*  (gateway port, default 8080)\n   Registered by the Lua application with Http.Register (config/scripts/smartlocker/api/frontend.lua). Every request is handed to the SmartLocker script and runs on ITS thread, at its next Sleep(). Replies are {\"ok\":true,...} or {\"ok\":false,\"error\":\"...\"}.\n   These only exist while the SmartLocker script is RUNNING. With it stopped, expect 404/503 — GET /api/app lists what is currently registered.\n\n2. LOCKER UI API — {{lockerUrl}}/api/locker/*  (locker floor-plan port, default 8081)\n   Served by the gateway itself. The GETs read smartlocker.db directly (read-only, so they answer even while the script is busy waiting out a door timeout) and return RAW arrays/objects, not the {ok:...} envelope. The three POSTs are forwarded to the script and answer exactly like the ones above, with source=locker-ui attached.\n   This port only listens when web.locker_ui_enabled is on (Configuration page).\n\nAUTHENTICATION: none. These endpoints are unauthenticated — the login on the web UI is a client-side redirect, not a server-side gate. Do not expose either port beyond the machine's own network.\n\nUnlock and Release ACTUALLY MOVE HARDWARE: they pulse the PLC output for a real door and write to the audit trail. Run them against a bench cabinet, not a live one, unless that is what you mean to do.\n\nSet lockerId (and gatewayUrl / lockerUrl) in the collection variables. 'Lockers - list' saves the first locker's id into lockerId automatically, so running it first makes the per-locker requests work without editing anything.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "gatewayUrl", "value": "http://localhost:8080", "description": "Gateway web port (web.port)" },
+    { "key": "lockerUrl", "value": "http://localhost:8082", "description": "SmartLocker floor-plan port (web.locker_ui_port). 8082, not the 8081 default: the mock REST server holds 8081 on this machine." },
+    { "key": "lockerId", "value": "1", "description": "Set automatically by 'Lockers - list'" }
+  ],
+  "item": [
+    {
+      "name": "1. Script API (gateway port, /api/app)",
+      "description": "Served by the running SmartLocker Lua script. All replies use the {ok:true|false} envelope.",
+      "item": [
+        {
+          "name": "Registered routes (is the script serving?)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{gatewayUrl}}/api/app", "host": ["{{gatewayUrl}}"], "path": ["api", "app"] },
+            "description": "Lists what the running scripts have registered. The fastest way to tell 'the script is stopped' from 'I typed the path wrong' — an empty routes array means nothing is serving."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('SmartLocker routes are registered', () => {",
+                  "    pm.expect(body.routes, 'no routes — is the SmartLocker script running?').to.include('GET lockers');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Lockers - list",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{gatewayUrl}}/api/app/lockers",
+              "host": ["{{gatewayUrl}}"],
+              "path": ["api", "app", "lockers"],
+              "query": [
+                { "key": "status", "value": "EMPTY", "disabled": true, "description": "EMPTY | ASSIGNED | EXPIRED | ERROR | USED | employee | contractor | all" }
+              ]
+            },
+            "description": "The same model the floor plan draws, plus a summary. Saves the first locker's id into {{lockerId}} for the requests below."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('ok envelope', () => pm.expect(body.ok).to.be.true);",
+                  "pm.test('lockers is an array', () => pm.expect(body.lockers).to.be.an('array'));",
+                  "",
+                  "// Makes every per-locker request below work without editing a variable by hand.",
+                  "if (body.lockers && body.lockers.length) {",
+                  "    pm.collectionVariables.set('lockerId', body.lockers[0].locker_id);",
+                  "    console.log('lockerId set to ' + body.lockers[0].locker_id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Lockers - filter by status",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{gatewayUrl}}/api/app/lockers?status=EMPTY",
+              "host": ["{{gatewayUrl}}"],
+              "path": ["api", "app", "lockers"],
+              "query": [{ "key": "status", "value": "EMPTY" }]
+            },
+            "description": "status is matched case-insensitively. USED is an alias for ASSIGNED; employee/contractor filter by locker_type instead of status."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('every row matches the filter', () => {",
+                  "    (body.lockers || []).forEach(l => pm.expect(l.status).to.eql('EMPTY'));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Locker - one, with its recent events",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{gatewayUrl}}/api/app/lockers/{{lockerId}}",
+              "host": ["{{gatewayUrl}}"],
+              "path": ["api", "app", "lockers", "{{lockerId}}"]
+            },
+            "description": "One locker plus its last 50 audit rows. 404 with ok:false when there is no such locker."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('ok envelope', () => pm.expect(body.ok).to.be.true);",
+                  "pm.test('carries its log history', () => pm.expect(body.locker.logs).to.be.an('array'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Employees",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{gatewayUrl}}/api/app/employees", "host": ["{{gatewayUrl}}"], "path": ["api", "app", "employees"] },
+            "description": "Card list with each holder's computed status and assigned locker."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('employees is an array', () => pm.expect(pm.response.json().employees).to.be.an('array'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Status (hardware + sync health)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{gatewayUrl}}/api/app/status", "host": ["{{gatewayUrl}}"], "path": ["api", "app", "status"] },
+            "description": "Locker counts by state, employee counts, and whatever the hardware/sync hooks report."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "const s = pm.response.json().status;",
+                  "pm.test('locker totals present', () => pm.expect(s.lockers).to.have.property('total'));",
+                  "console.log('lockers: ' + JSON.stringify(s.lockers));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Events (audit trail)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{gatewayUrl}}/api/app/events?limit=50",
+              "host": ["{{gatewayUrl}}"],
+              "path": ["api", "app", "events"],
+              "query": [{ "key": "limit", "value": "50", "description": "capped at 500 by the script" }]
+            },
+            "description": "Recent locker events, newest first."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('events is an array', () => pm.expect(pm.response.json().events).to.be.an('array'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Unlock a locker  [MOVES HARDWARE]",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{}" },
+            "url": {
+              "raw": "{{gatewayUrl}}/api/app/lockers/{{lockerId}}/unlock?source=postman",
+              "host": ["{{gatewayUrl}}"],
+              "path": ["api", "app", "lockers", "{{lockerId}}", "unlock"],
+              "query": [{ "key": "source", "value": "postman", "description": "recorded on the audit row" }]
+            },
+            "description": "Opens a real door through the same Locker.unlock() a card swipe uses, so the door monitor, the timeouts and the audit trail all apply.\n\nExpect: 200 ok:true; 404 no such locker; 409 no unlock output configured; 502 the PLC write failed. A locker already mid-cycle answers 200 with a 'already opening' message rather than pulsing twice."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('answered', () => pm.expect([200, 404, 409, 502]).to.include(pm.response.code));",
+                  "const body = pm.response.json();",
+                  "if (pm.response.code === 200) {",
+                  "    pm.test('ok envelope', () => pm.expect(body.ok).to.be.true);",
+                  "    console.log(body.message);",
+                  "} else {",
+                  "    console.log('refused: ' + body.error);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Release a locker  [FREES AN ASSIGNMENT]",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{}" },
+            "url": {
+              "raw": "{{gatewayUrl}}/api/app/lockers/{{lockerId}}/release?source=postman",
+              "host": ["{{gatewayUrl}}"],
+              "path": ["api", "app", "lockers", "{{lockerId}}", "release"],
+              "query": [{ "key": "source", "value": "postman" }]
+            },
+            "description": "Breaks the employee/locker assignment in one transaction. An already-empty locker answers 200 with 'đã trống' rather than an error.\n\nExpect: 200; 404 no such locker; 501 release not wired in this build; 500 the release failed."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('answered', () => pm.expect([200, 404, 500, 501]).to.include(pm.response.code));",
+                  "console.log(JSON.stringify(pm.response.json()));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Sync employees now",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{}" },
+            "url": {
+              "raw": "{{gatewayUrl}}/api/app/sync",
+              "host": ["{{gatewayUrl}}"],
+              "path": ["api", "app", "sync"]
+            },
+            "description": "Queues the employee synchronisation. Returns as soon as it is SCHEDULED, not when it finishes — a full REST sync can take seconds and the connection is not held open for it. Watch the Logs page for the outcome.\n\nExpect: 200; 501 sync not wired in this build; 500 could not schedule."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('answered', () => pm.expect([200, 500, 501]).to.include(pm.response.code));",
+                  "console.log(JSON.stringify(pm.response.json()));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "2. Locker UI API (locker port, /api/locker)",
+      "description": "Served by the gateway from a read-only handle on smartlocker.db. GETs return RAW rows (no ok envelope) and keep working while the script is busy; the POSTs are forwarded to the script and behave like the ones in folder 1.\n\nNeeds web.locker_ui_enabled on, and the listener is created at gateway START — changing locker_ui_port takes effect on restart, not on save. If the whole folder fails to connect, check both.",
+      "item": [
+        {
+          "name": "State (everything the floor plan draws)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{lockerUrl}}/api/locker/state?events=40",
+              "host": ["{{lockerUrl}}"],
+              "path": ["api", "locker", "state"],
+              "query": [{ "key": "events", "value": "40", "description": "how many recent events to include" }]
+            },
+            "description": "One request the page can render from: lockers, summary and recent events. Same payload the locker WebSocket pushes."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('has lockers', () => pm.expect(pm.response.json()).to.have.property('lockers'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Lockers (raw rows)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{lockerUrl}}/api/locker/lockers", "host": ["{{lockerUrl}}"], "path": ["api", "locker", "lockers"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('array of rows', () => pm.expect(pm.response.json()).to.be.an('array'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Locker by id (joined with its holder)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{lockerUrl}}/api/locker/lockers/{{lockerId}}",
+              "host": ["{{lockerUrl}}"],
+              "path": ["api", "locker", "lockers", "{{lockerId}}"]
+            },
+            "description": "Joins the employee row, so username / gender / role / card expiry come back with the locker."
+          }
+        },
+        {
+          "name": "Employees (raw rows)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{lockerUrl}}/api/locker/employees", "host": ["{{lockerUrl}}"], "path": ["api", "locker", "employees"] },
+            "description": "Ordered active-first, then by username."
+          }
+        },
+        {
+          "name": "Logs",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{lockerUrl}}/api/locker/logs?limit=100",
+              "host": ["{{lockerUrl}}"],
+              "path": ["api", "locker", "logs"],
+              "query": [{ "key": "limit", "value": "100", "description": "clamped to 1..1000" }]
+            },
+            "description": "locker_logs newest first, straight from the database."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('array of rows', () => pm.expect(pm.response.json()).to.be.an('array'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Unlock via the UI port  [MOVES HARDWARE]",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{}" },
+            "url": {
+              "raw": "{{lockerUrl}}/api/locker/lockers/{{lockerId}}/unlock",
+              "host": ["{{lockerUrl}}"],
+              "path": ["api", "locker", "lockers", "{{lockerId}}", "unlock"]
+            },
+            "description": "Identical to the script route, forwarded with source=locker-ui — which is what lands on the audit row. This is what the floor plan's 'Mở khóa từ xa' button calls."
+          }
+        },
+        {
+          "name": "Release via the UI port",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{}" },
+            "url": {
+              "raw": "{{lockerUrl}}/api/locker/lockers/{{lockerId}}/release",
+              "host": ["{{lockerUrl}}"],
+              "path": ["api", "locker", "lockers", "{{lockerId}}", "release"]
+            },
+            "description": "The floor plan's 'Thu hồi' button."
+          }
+        },
+        {
+          "name": "Sync via the UI port",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{}" },
+            "url": { "raw": "{{lockerUrl}}/api/locker/sync", "host": ["{{lockerUrl}}"], "path": ["api", "locker", "sync"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Negative cases",
+      "description": "What a wrong request should look like, so a real failure is recognisable.",
+      "item": [
+        {
+          "name": "Unknown locker id (expect 404 ok:false)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{gatewayUrl}}/api/app/lockers/999999",
+              "host": ["{{gatewayUrl}}"],
+              "path": ["api", "app", "lockers", "999999"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('404', () => pm.response.to.have.status(404));",
+                  "const body = pm.response.json();",
+                  "pm.test('ok:false with a reason', () => {",
+                  "    pm.expect(body.ok).to.be.false;",
+                  "    pm.expect(body.error).to.be.a('string');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Unregistered path (expect 404)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{gatewayUrl}}/api/app/does-not-exist",
+              "host": ["{{gatewayUrl}}"],
+              "path": ["api", "app", "does-not-exist"]
+            },
+            "description": "Nothing registered this path. Compare with GET /api/app to see what IS registered — a 404 here and an empty routes list there means the script is not running at all."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('404 or 503', () => pm.expect([404, 503]).to.include(pm.response.code));"]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
