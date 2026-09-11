@@ -1,0 +1,55 @@
+{
+  "name": "web-ui-3d-component-system",
+  "version": "1.0.0",
+  "description": "Dark Neumorphism Web UI Component Library with 3D Effects and Glowing Accents",
+  "author": "",
+  "license": "MIT",
+  "keywords": [
+    "ui-components",
+    "neumorphism",
+    "web-design",
+    "3d-effects",
+    "dark-theme",
+    "responsive",
+    "accessibility",
+    "framework-ready"
+  ],
+  "repository": {
+    "type": "git",
+    "url": ""
+  },
+  "scripts": {
+    "serve": "python -m http.server 8000",
+    "serve:node": "npx http-server"
+  },
+  "devDependencies": {},
+  "components": {
+    "form": ["checkbox", "input", "button"],
+    "data-display": ["table", "card-monitor", "led-indicator"],
+    "navigation": ["tabs", "glow-background"]
+  },
+  "features": {
+    "components": 8,
+    "size-variants": 3,
+    "state-variations": "multiple per component",
+    "responsive-breakpoints": ["mobile", "tablet", "desktop"],
+    "animation-speeds": ["150ms", "200ms", "300ms"],
+    "accessibility": "WCAG 2.1 AA",
+    "framework-ready": true
+  },
+  "design-system": {
+    "theme": "dark neumorphism",
+    "colors": "50+ CSS variables",
+    "shadows": "outer & inner variants",
+    "animations": "8 keyframes",
+    "typography": "system fonts"
+  },
+  "files": [
+    "index.html",
+    "styles.css",
+    "components.css",
+    "scripts.js",
+    "README.md",
+    "package.json"
+  ]
+}

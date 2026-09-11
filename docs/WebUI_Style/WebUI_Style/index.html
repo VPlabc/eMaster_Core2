@@ -1,0 +1,1111 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>3D Web UI Component System | Neumorphism Design</title>
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="components.css" />
+  <style>
+    /* Additional demo-specific styles */
+    .demo-header {
+      background: linear-gradient(
+        135deg,
+        var(--color-bg-surface),
+        var(--color-bg-primary)
+      );
+      padding: 3rem 1rem;
+      text-align: center;
+      box-shadow: var(--shadow-outer-lg);
+      border-bottom: 3px solid var(--color-accent-green);
+      margin-bottom: 2rem;
+    }
+
+    .demo-header h1 {
+      font-size: 2.5rem;
+      color: var(--color-accent-green);
+      margin-bottom: 0.5rem;
+      text-shadow: 0 0 30px rgba(0, 255, 204, 0.3);
+      animation: slide-in-top 0.6s ease-out;
+    }
+
+    .demo-header p {
+      color: var(--color-text-secondary);
+      font-size: 1.1rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .demo-controls {
+      display: flex;
+      gap: 1rem;
+      justify-content: center;
+      flex-wrap: wrap;
+      margin-bottom: 2rem;
+    }
+
+    .control-group {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      background-color: var(--color-bg-surface);
+      padding: 0.75rem 1.5rem;
+      border-radius: var(--radius-md);
+      box-shadow: var(--shadow-outer-sm);
+    }
+
+    .control-label {
+      font-size: 0.9rem;
+      color: var(--color-text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .control-buttons {
+      display: flex;
+      gap: 0.5rem;
+    }
+
+    .control-btn {
+      padding: 0.5rem 1rem;
+      background-color: var(--color-bg-highlight);
+      border: 1px solid rgba(0, 255, 204, 0.3);
+      border-radius: var(--radius-sm);
+      color: var(--color-text-secondary);
+      cursor: pointer;
+      transition: all 0.2s;
+      font-size: 0.85rem;
+      font-weight: 600;
+    }
+
+    .control-btn:hover,
+    .control-btn.active {
+      background-color: var(--color-bg-highlight);
+      color: var(--color-accent-green);
+      border-color: var(--color-accent-green);
+      box-shadow: var(--glow-soft);
+    }
+
+    .section-container {
+      display: grid;
+      gap: 2rem;
+      padding: 0 1rem 2rem;
+    }
+
+    .component-section {
+      background-color: var(--color-bg-surface);
+      border-radius: var(--radius-md);
+      padding: 2rem;
+      box-shadow: var(--shadow-outer-md);
+      animation: pop-in 0.5s ease-out;
+    }
+
+    .component-section-title {
+      font-size: 1.5rem;
+      color: var(--color-accent-green);
+      margin-bottom: 1.5rem;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      padding-bottom: 1rem;
+      border-bottom: 2px solid rgba(0, 255, 204, 0.2);
+    }
+
+    .component-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 1.5rem;
+      margin-bottom: 2rem;
+    }
+
+    .component-demo {
+      background-color: var(--color-bg-primary);
+      padding: 1.5rem;
+      border-radius: var(--radius-md);
+      border-left: 3px solid var(--color-accent-green);
+      box-shadow: var(--shadow-inner-sm);
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+      align-items: center;
+      justify-content: center;
+      min-height: 150px;
+    }
+
+    .size-controls {
+      display: flex;
+      gap: 0.5rem;
+      justify-content: center;
+      margin-bottom: 1rem;
+    }
+
+    .state-controls {
+      display: flex;
+      gap: 0.5rem;
+      justify-content: center;
+      flex-wrap: wrap;
+      margin-bottom: 1rem;
+    }
+
+    .code-snippet {
+      background-color: var(--color-bg-primary);
+      border: 1px solid rgba(0, 255, 204, 0.2);
+      border-radius: var(--radius-sm);
+      padding: 1rem;
+      margin-top: 1rem;
+      position: relative;
+    }
+
+    .code-snippet code {
+      display: block;
+      font-family: 'Monaco', 'Courier New', monospace;
+      font-size: 0.85rem;
+      line-height: 1.5;
+      max-height: 200px;
+      overflow-y: auto;
+      color: var(--color-accent-yellow);
+      white-space: pre-wrap;
+      word-wrap: break-word;
+    }
+
+    .copy-button {
+      position: absolute;
+      top: 0.5rem;
+      right: 0.5rem;
+      padding: 0.5rem 1rem;
+      background-color: var(--color-accent-green);
+      color: var(--color-bg-primary);
+      border: none;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      font-size: 0.75rem;
+      font-weight: 600;
+      transition: all 0.2s;
+    }
+
+    .copy-button:hover {
+      box-shadow: var(--glow-strong);
+      transform: scale(1.05);
+    }
+
+    .demo-footer {
+      background-color: var(--color-bg-surface);
+      padding: 2rem;
+      text-align: center;
+      margin-top: 3rem;
+      border-top: 2px solid rgba(0, 255, 204, 0.2);
+      box-shadow: var(--shadow-outer-md);
+    }
+
+    .footer-text {
+      color: var(--color-text-secondary);
+      margin-bottom: 1rem;
+    }
+
+    .footer-info {
+      display: flex;
+      justify-content: center;
+      gap: 2rem;
+      flex-wrap: wrap;
+      font-size: 0.9rem;
+      color: var(--color-text-muted);
+    }
+
+    .info-item {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    @media (max-width: 768px) {
+      .demo-header h1 {
+        font-size: 1.8rem;
+      }
+
+      .component-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .demo-controls {
+        flex-direction: column;
+      }
+
+      .control-group {
+        width: 100%;
+        justify-content: space-between;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <!-- HEADER -->
+  <div class="demo-header">
+    <h1>🎨 3D Web UI Component System v2.0+</h1>
+    <p>Industrial Edge Gateway Dashboard with Dark & Light Mode</p>
+    <p style="font-size: 0.95rem; color: var(--color-text-muted)">
+      14 Components × 3 Size Variants × Multiple States × Dark/Light Modes
+    </p>
+    <p style="font-size: 0.9rem; color: var(--color-accent-green); margin-top: 1.5rem">
+      💎 NEW: Premium Monitor Card Value with glow borders & animated status | ⚡ Complete multi-page dashboard system ready for deployment
+    </p>
+  </div>
+
+  <!-- QUICK ACCESS BUTTONS -->
+  <div style="padding: 0 1rem 2rem; display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; max-width: 1200px; margin: 0 auto">
+    <a href="monitor.html" style="text-decoration: none">
+      <button style="width: 100%; padding: 1.2rem; background-color: var(--color-bg-surface); border: 2px solid var(--color-accent-green); border-radius: var(--radius-md); color: var(--color-accent-green); font-weight: 600; cursor: pointer; transition: all 0.3s; box-shadow: var(--shadow-outer-md)" onmouseover="this.style.boxShadow = 'var(--glow-strong)'; this.style.transform = 'scale(1.05)'" onmouseout="this.style.boxShadow = 'var(--shadow-outer-md)'; this.style.transform = 'scale(1)'">
+        📊 Monitor Dashboard
+      </button>
+    </a>
+    <a href="config.html" style="text-decoration: none">
+      <button style="width: 100%; padding: 1.2rem; background-color: var(--color-bg-surface); border: 2px solid var(--color-accent-green); border-radius: var(--radius-md); color: var(--color-accent-green); font-weight: 600; cursor: pointer; transition: all 0.3s; box-shadow: var(--shadow-outer-md)" onmouseover="this.style.boxShadow = 'var(--glow-strong)'; this.style.transform = 'scale(1.05)'" onmouseout="this.style.boxShadow = 'var(--shadow-outer-md)'; this.style.transform = 'scale(1)'">
+        ⚙️ Configuration
+      </button>
+    </a>
+    <a href="mapping.html" style="text-decoration: none">
+      <button style="width: 100%; padding: 1.2rem; background-color: var(--color-bg-surface); border: 2px solid var(--color-accent-green); border-radius: var(--radius-md); color: var(--color-accent-green); font-weight: 600; cursor: pointer; transition: all 0.3s; box-shadow: var(--shadow-outer-md)" onmouseover="this.style.boxShadow = 'var(--glow-strong)'; this.style.transform = 'scale(1.05)'" onmouseout="this.style.boxShadow = 'var(--shadow-outer-md)'; this.style.transform = 'scale(1)'">
+        🔗 Data Mapping
+      </button>
+    </a>
+  </div>
+
+  <!-- DEMO CONTROLS -->
+  <div class="demo-controls">
+    <div class="control-group">
+      <span class="control-label">Size:</span>
+      <div class="control-buttons">
+        <button class="control-btn size-control" data-size="sm">Small</button>
+        <button class="control-btn size-control active" data-size="md">Medium</button>
+        <button class="control-btn size-control" data-size="lg">Large</button>
+      </div>
+    </div>
+    <div class="control-group">
+      <span class="control-label">Theme:</span>
+      <button class="control-btn" data-theme-toggle>🌙 Dark</button>
+    </div>
+  </div>
+
+  <!-- MAIN CONTENT -->
+  <div class="section-container">
+
+    <!-- 1. FORM COMPONENTS -->
+    <div class="component-section">
+      <h2 class="component-section-title">📝 Form Components</h2>
+
+      <!-- Checkbox -->
+      <div class="component-demo" data-component="checkbox">
+        <h3>Checkbox</h3>
+        <label class="checkbox size-md">
+          <input type="checkbox" />
+          <div class="checkbox-input">
+            <div class="checkbox-checkmark"></div>
+          </div>
+          <span class="checkbox-label">Accept terms & conditions</span>
+        </label>
+        <div class="code-snippet">
+          <button class="copy-button">Copy</button>
+          <code>&lt;label class="checkbox"&gt;
+  &lt;input type="checkbox"&gt;
+  &lt;div class="checkbox-input"&gt;
+    &lt;div class="checkbox-checkmark"&gt;&lt;/div&gt;
+  &lt;/div&gt;
+  &lt;span class="checkbox-label"&gt;Label&lt;/span&gt;
+&lt;/label&gt;</code>
+        </div>
+      </div>
+
+      <!-- Input Field -->
+      <div class="component-demo" data-component="input">
+        <h3>Input Field</h3>
+        <div class="input-group">
+          <label class="input-label">Email Address</label>
+          <input
+            type="email"
+            class="input-field size-md"
+            placeholder="Enter your email"
+          />
+          <div class="input-helper">We'll never share your email</div>
+        </div>
+        <div class="code-snippet">
+          <button class="copy-button">Copy</button>
+          <code>&lt;input
+  type="email"
+  class="input-field"
+  placeholder="Enter email"
+/&gt;</code>
+        </div>
+      </div>
+
+      <!-- Button -->
+      <div class="component-demo" data-component="button">
+        <h3>Button</h3>
+        <div style="display: flex; gap: 1rem; flex-wrap: wrap; justify-content: center">
+          <button class="btn size-md">Default</button>
+          <button class="btn btn-primary size-md">Primary</button>
+          <button class="btn btn-danger size-md">Danger</button>
+        </div>
+        <div class="code-snippet">
+          <button class="copy-button">Copy</button>
+          <code>&lt;button class="btn size-md"&gt;
+  Click Me
+&lt;/button&gt;</code>
+        </div>
+      </div>
+    </div>
+
+    <!-- 2. DATA DISPLAY COMPONENTS -->
+    <div class="component-section">
+      <h2 class="component-section-title">📊 Data Display Components</h2>
+
+      <!-- Table -->
+      <div class="component-demo" data-component="table" style="min-height: auto; align-items: stretch">
+        <h3 style="width: 100%">Table</h3>
+        <div class="table-wrapper">
+          <table class="table-normal">
+            <thead>
+              <tr>
+                <th>Component</th>
+                <th>Status</th>
+                <th>Value</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Checkbox</td>
+                <td><span class="led-light state-green" style="display: inline-block; width: 8px; height: 8px"></span> Active</td>
+                <td>100%</td>
+              </tr>
+              <tr>
+                <td>Input Field</td>
+                <td><span class="led-light state-yellow" style="display: inline-block; width: 8px; height: 8px"></span> Pending</td>
+                <td>75%</td>
+              </tr>
+              <tr>
+                <td>Button</td>
+                <td><span class="led-light state-green" style="display: inline-block; width: 8px; height: 8px"></span> Active</td>
+                <td>100%</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Card Monitor -->
+      <div class="component-demo" data-component="card-monitor">
+        <h3>Card Monitor</h3>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; width: 100%">
+          <div class="card-monitor size-md status-green">
+            <div class="card-monitor-header">System A</div>
+            <div class="card-monitor-body">All systems operational</div>
+            <div class="card-monitor-status-bar">
+              <span class="status-indicator green"></span>
+              <span>Online</span>
+            </div>
+          </div>
+          <div class="card-monitor size-md status-yellow">
+            <div class="card-monitor-header">System B</div>
+            <div class="card-monitor-body">Maintenance in progress</div>
+            <div class="card-monitor-status-bar">
+              <span class="status-indicator yellow"></span>
+              <span>Pending</span>
+            </div>
+          </div>
+          <div class="card-monitor size-md status-red">
+            <div class="card-monitor-header">System C</div>
+            <div class="card-monitor-body">Error detected</div>
+            <div class="card-monitor-status-bar">
+              <span class="status-indicator red"></span>
+              <span>Offline</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- LED Indicator -->
+      <div class="component-demo" data-component="led">
+        <h3>LED Indicator (Click to toggle)</h3>
+        <div style="display: flex; gap: 2rem; flex-wrap: wrap; justify-content: center">
+          <div class="led-indicator size-md">
+            <div class="led-light state-green"></div>
+            <span class="led-label">System Running</span>
+          </div>
+          <div class="led-indicator size-md">
+            <div class="led-light state-yellow"></div>
+            <span class="led-label">Standby Mode</span>
+          </div>
+          <div class="led-indicator size-md">
+            <div class="led-light state-red"></div>
+            <span class="led-label">Alert</span>
+          </div>
+          <div class="led-indicator size-md">
+            <div class="led-light state-off"></div>
+            <span class="led-label">Offline</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 3. NAVIGATION & CONTAINER COMPONENTS -->
+    <div class="component-section">
+      <h2 class="component-section-title">🧭 Navigation & Containers</h2>
+
+      <!-- Tabs -->
+      <div class="component-demo" data-component="tabs" style="width: 100%; align-items: stretch">
+        <h3 style="width: 100%">Tabs</h3>
+        <div class="tabs-wrapper" style="width: 100%">
+          <div class="tabs-container size-md">
+            <button class="tab-button active" data-tab="tab1">Overview</button>
+            <button class="tab-button" data-tab="tab2">Details</button>
+            <button class="tab-button" data-tab="tab3">Settings</button>
+          </div>
+          <div class="tab-panel active" data-tab="tab1" style="width: 100%">
+            <p>This is the overview tab. Showing the main information and quick stats.</p>
+          </div>
+          <div class="tab-panel" data-tab="tab2" style="width: 100%">
+            <p>This is the details tab. Contains in-depth information about the component.</p>
+          </div>
+          <div class="tab-panel" data-tab="tab3" style="width: 100%">
+            <p>This is the settings tab. Configure options and preferences here.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Glow Background -->
+      <div class="component-demo" data-component="glow" style="flex-direction: row; flex-wrap: wrap; gap: 1rem">
+        <h3 style="width: 100%; text-align: center">Glow Background (Hover to activate)</h3>
+        <div class="glow-background size-md glow-green">
+          <div class="glow-background-content">Green Glow</div>
+        </div>
+        <div class="glow-background size-md glow-blue">
+          <div class="glow-background-content">Blue Glow</div>
+        </div>
+        <div class="glow-background size-md glow-purple">
+          <div class="glow-background-content">Purple Glow</div>
+        </div>
+        <div class="glow-background size-md glow-yellow">
+          <div class="glow-background-content">Yellow Glow</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 4. INDUSTRIAL COMPONENTS (NEW) -->
+    <div class="component-section">
+      <h2 class="component-section-title">🏭 Industrial Dashboard Components</h2>
+
+      <!-- Monitor Card Standard -->
+      <div>
+        <h3 style="margin-bottom: 1rem">Monitor Card Standard</h3>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1.5rem">
+          <div class="monitor-card-standard size-md status-green">
+            <div class="monitor-card-standard-header">Temperature</div>
+            <div class="monitor-card-standard-body">
+              <div class="monitor-card-standard-value">24.5</div>
+              <div class="monitor-card-standard-unit">°C</div>
+            </div>
+            <div class="monitor-card-standard-footer"></div>
+          </div>
+          <div class="monitor-card-standard size-md status-yellow">
+            <div class="monitor-card-standard-header">Humidity</div>
+            <div class="monitor-card-standard-body">
+              <div class="monitor-card-standard-value">65</div>
+              <div class="monitor-card-standard-unit">%</div>
+            </div>
+            <div class="monitor-card-standard-footer"></div>
+          </div>
+          <div class="monitor-card-standard size-md status-red">
+            <div class="monitor-card-standard-header">Pressure</div>
+            <div class="monitor-card-standard-body">
+              <div class="monitor-card-standard-value">1013</div>
+              <div class="monitor-card-standard-unit">hPa</div>
+            </div>
+            <div class="monitor-card-standard-footer"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Monitor Card Flat -->
+      <div style="margin-top: 2rem">
+        <h3 style="margin-bottom: 1rem">Monitor Card Flat</h3>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1.5rem">
+          <div class="monitor-card-flat status-green">
+            <div class="monitor-card-flat-label">CPU Usage</div>
+            <div class="monitor-card-flat-value">45</div>
+            <div class="monitor-card-flat-unit">%</div>
+            <div class="monitor-card-flat-glow"></div>
+          </div>
+          <div class="monitor-card-flat status-yellow">
+            <div class="monitor-card-flat-label">Memory</div>
+            <div class="monitor-card-flat-value">72</div>
+            <div class="monitor-card-flat-unit">%</div>
+            <div class="monitor-card-flat-glow"></div>
+          </div>
+          <div class="monitor-card-flat status-red">
+            <div class="monitor-card-flat-label">Disk I/O</div>
+            <div class="monitor-card-flat-value">89</div>
+            <div class="monitor-card-flat-unit">%</div>
+            <div class="monitor-card-flat-glow"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Chart Card -->
+      <div style="margin-top: 2rem">
+        <h3 style="margin-bottom: 1rem">Chart Card (Historic Data & Analytics)</h3>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 1.5rem">
+          <!-- Temperature Trend -->
+          <div class="chart-card">
+            <div class="chart-card-header">24-Hour Temperature Trend</div>
+            <div class="chart-card-container">
+              <div style="position: relative; height: 150px; display: flex; align-items: flex-end; justify-content: space-between; padding: 1rem; gap: 0.5rem">
+                <div style="width: 100%; height: 4px; background: rgba(0,255,204,0.1); position: absolute; bottom: 30%; border-radius: 2px"></div>
+                <div style="flex: 1; background: linear-gradient(180deg, rgba(0,255,150,0.6), rgba(0,255,150,0.1)); height: 35%; border-radius: 4px; position: relative; z-index: 1">
+                  <span style="font-size: 0.75rem; color: var(--color-text-muted); position: absolute; top: -25px; left: 50%; transform: translateX(-50%)">22°C</span>
+                </div>
+                <div style="flex: 1; background: linear-gradient(180deg, rgba(0,255,150,0.6), rgba(0,255,150,0.1)); height: 45%; border-radius: 4px; position: relative; z-index: 1">
+                  <span style="font-size: 0.75rem; color: var(--color-text-muted); position: absolute; top: -25px; left: 50%; transform: translateX(-50%)">24°C</span>
+                </div>
+                <div style="flex: 1; background: linear-gradient(180deg, rgba(0,255,150,0.6), rgba(0,255,150,0.1)); height: 55%; border-radius: 4px; position: relative; z-index: 1">
+                  <span style="font-size: 0.75rem; color: var(--color-text-muted); position: absolute; top: -25px; left: 50%; transform: translateX(-50%)">26°C</span>
+                </div>
+                <div style="flex: 1; background: linear-gradient(180deg, rgba(0,255,150,0.6), rgba(0,255,150,0.1)); height: 40%; border-radius: 4px; position: relative; z-index: 1">
+                  <span style="font-size: 0.75rem; color: var(--color-text-muted); position: absolute; top: -25px; left: 50%; transform: translateX(-50%)">24°C</span>
+                </div>
+                <div style="flex: 1; background: linear-gradient(180deg, rgba(0,255,150,0.6), rgba(0,255,150,0.1)); height: 50%; border-radius: 4px; position: relative; z-index: 1">
+                  <span style="font-size: 0.75rem; color: var(--color-text-muted); position: absolute; top: -25px; left: 50%; transform: translateX(-50%)">25°C</span>
+                </div>
+              </div>
+              <div style="text-align: center; font-size: 0.75rem; color: var(--color-text-muted); display: flex; justify-content: space-around; margin-top: 2rem; padding: 0 1rem">
+                <span>00:00</span><span>06:00</span><span>12:00</span><span>18:00</span><span>24:00</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- CPU Usage Trend -->
+          <div class="chart-card">
+            <div class="chart-card-header">CPU Usage (7-Day Average)</div>
+            <div class="chart-card-container">
+              <div style="position: relative; height: 150px; display: flex; align-items: flex-end; justify-content: space-between; padding: 1rem; gap: 0.5rem">
+                <div style="width: 100%; height: 4px; background: rgba(58,160,255,0.1); position: absolute; bottom: 40%; border-radius: 2px"></div>
+                <div style="flex: 1; background: linear-gradient(180deg, rgba(58,160,255,0.6), rgba(58,160,255,0.1)); height: 45%; border-radius: 4px; position: relative; z-index: 1">
+                  <span style="font-size: 0.75rem; color: var(--color-text-muted); position: absolute; top: -25px; left: 50%; transform: translateX(-50%)">45%</span>
+                </div>
+                <div style="flex: 1; background: linear-gradient(180deg, rgba(58,160,255,0.6), rgba(58,160,255,0.1)); height: 62%; border-radius: 4px; position: relative; z-index: 1">
+                  <span style="font-size: 0.75rem; color: var(--color-text-muted); position: absolute; top: -25px; left: 50%; transform: translateX(-50%)">62%</span>
+                </div>
+                <div style="flex: 1; background: linear-gradient(180deg, rgba(58,160,255,0.6), rgba(58,160,255,0.1)); height: 38%; border-radius: 4px; position: relative; z-index: 1">
+                  <span style="font-size: 0.75rem; color: var(--color-text-muted); position: absolute; top: -25px; left: 50%; transform: translateX(-50%)">38%</span>
+                </div>
+                <div style="flex: 1; background: linear-gradient(180deg, rgba(58,160,255,0.6), rgba(58,160,255,0.1)); height: 71%; border-radius: 4px; position: relative; z-index: 1">
+                  <span style="font-size: 0.75rem; color: var(--color-text-muted); position: absolute; top: -25px; left: 50%; transform: translateX(-50%)">71%</span>
+                </div>
+                <div style="flex: 1; background: linear-gradient(180deg, rgba(58,160,255,0.6), rgba(58,160,255,0.1)); height: 52%; border-radius: 4px; position: relative; z-index: 1">
+                  <span style="font-size: 0.75rem; color: var(--color-text-muted); position: absolute; top: -25px; left: 50%; transform: translateX(-50%)">52%</span>
+                </div>
+              </div>
+              <div style="text-align: center; font-size: 0.75rem; color: var(--color-text-muted); display: flex; justify-content: space-around; margin-top: 2rem; padding: 0 1rem">
+                <span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Radio Buttons -->
+      <div style="margin-top: 2rem">
+        <h3 style="margin-bottom: 1rem">Radio Buttons</h3>
+        <div class="radio-group">
+          <label class="radio-button">
+            <input type="radio" name="mode" value="auto" checked>
+            <div class="radio-button-circle"></div>
+            <span class="radio-button-label">Automatic Mode</span>
+          </label>
+          <label class="radio-button">
+            <input type="radio" name="mode" value="manual">
+            <div class="radio-button-circle"></div>
+            <span class="radio-button-label">Manual Mode</span>
+          </label>
+          <label class="radio-button">
+            <input type="radio" name="mode" value="schedule">
+            <div class="radio-button-circle"></div>
+            <span class="radio-button-label">Schedule Mode</span>
+          </label>
+        </div>
+      </div>
+
+      <!-- Combo Box -->
+      <div style="margin-top: 2rem">
+        <h3 style="margin-bottom: 1rem">Combo Box (Protocol Selection)</h3>
+        <div class="combo-box" style="max-width: 300px">
+          <button class="combo-box-trigger">
+            <span>Select Protocol</span>
+            <span class="combo-box-arrow">▼</span>
+          </button>
+          <div class="combo-box-dropdown">
+            <div class="combo-box-option selected">MQTT</div>
+            <div class="combo-box-option">Modbus TCP</div>
+            <div class="combo-box-option">OPC UA</div>
+            <div class="combo-box-option">HTTP REST</div>
+            <div class="combo-box-option">CoAP</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 5. MONITOR CARD VALUE (NEW PREMIUM COMPONENT) -->
+    <div class="component-section">
+      <h2 class="component-section-title">💎 Monitor Card Value (Premium Display)</h2>
+      <p style="color: var(--color-text-muted); margin-bottom: 1.5rem">
+        Advanced data display with outer glow border, soft gradients, and animated status indicators. Inspired by chart card aesthetic.
+      </p>
+
+      <h3 style="margin-bottom: 1rem">Monitor Card Value Examples</h3>
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1.5rem">
+        <div class="monitor-card-value size-md status-green">
+          <div class="monitor-card-value-header">Temperature</div>
+          <div class="monitor-card-value-body">
+            <div class="monitor-card-value-value">24.5</div>
+            <div class="monitor-card-value-unit">°C</div>
+          </div>
+          <div class="monitor-card-value-footer"></div>
+        </div>
+
+        <div class="monitor-card-value size-md status-yellow">
+          <div class="monitor-card-value-header">Humidity Level</div>
+          <div class="monitor-card-value-body">
+            <div class="monitor-card-value-value">72</div>
+            <div class="monitor-card-value-unit">%</div>
+          </div>
+          <div class="monitor-card-value-footer"></div>
+        </div>
+
+        <div class="monitor-card-value size-md status-red">
+          <div class="monitor-card-value-header">Pressure Alert</div>
+          <div class="monitor-card-value-body">
+            <div class="monitor-card-value-value">985</div>
+            <div class="monitor-card-value-unit">hPa</div>
+          </div>
+          <div class="monitor-card-value-footer"></div>
+        </div>
+
+        <div class="monitor-card-value size-md status-green">
+          <div class="monitor-card-value-header">CPU Usage</div>
+          <div class="monitor-card-value-body">
+            <div class="monitor-card-value-value">45</div>
+            <div class="monitor-card-value-unit">%</div>
+          </div>
+          <div class="monitor-card-value-footer"></div>
+        </div>
+
+        <div class="monitor-card-value size-md status-yellow">
+          <div class="monitor-card-value-header">Memory Used</div>
+          <div class="monitor-card-value-body">
+            <div class="monitor-card-value-value">3.2</div>
+            <div class="monitor-card-value-unit">GB</div>
+          </div>
+          <div class="monitor-card-value-footer"></div>
+        </div>
+
+        <div class="monitor-card-value size-md status-green">
+          <div class="monitor-card-value-header">Network Speed</div>
+          <div class="monitor-card-value-body">
+            <div class="monitor-card-value-value">125</div>
+            <div class="monitor-card-value-unit">Mbps</div>
+          </div>
+          <div class="monitor-card-value-footer"></div>
+        </div>
+      </div>
+
+      <h3 style="margin-top: 2rem; margin-bottom: 1rem">Size Variants</h3>
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1.5rem">
+        <div class="monitor-card-value size-sm status-green">
+          <div class="monitor-card-value-header">Small</div>
+          <div class="monitor-card-value-body">
+            <div class="monitor-card-value-value">22.1</div>
+            <div class="monitor-card-value-unit">°C</div>
+          </div>
+          <div class="monitor-card-value-footer"></div>
+        </div>
+
+        <div class="monitor-card-value size-md status-yellow">
+          <div class="monitor-card-value-header">Medium</div>
+          <div class="monitor-card-value-body">
+            <div class="monitor-card-value-value">68</div>
+            <div class="monitor-card-value-unit">%</div>
+          </div>
+          <div class="monitor-card-value-footer"></div>
+        </div>
+
+        <div class="monitor-card-value size-lg status-red">
+          <div class="monitor-card-value-header">Large</div>
+          <div class="monitor-card-value-body">
+            <div class="monitor-card-value-value">1018</div>
+            <div class="monitor-card-value-unit">hPa</div>
+          </div>
+          <div class="monitor-card-value-footer"></div>
+        </div>
+      </div>
+
+      <h3 style="margin-top: 2rem; margin-bottom: 1rem">Design Features</h3>
+      <div style="padding: 1rem; background-color: var(--color-bg-primary); border-radius: var(--radius-md); border-left: 3px solid var(--color-accent-green)">
+        <p style="color: var(--color-text-muted); margin: 0; font-size: 0.9rem; line-height: 1.6">
+          <strong>✨ Outer Glow Border:</strong> Soft radial glow effect inspired by chart card design<br/>
+          <strong>📊 Animated Status Bar:</strong> Center-spread glow animation that pulses smoothly<br/>
+          <strong>🎨 Status Colors:</strong> Green (normal), Yellow (warning), Red (critical)<br/>
+          <strong>3️⃣ Size Variants:</strong> Small, Medium (default), Large with responsive scaling<br/>
+          <strong>🌓 Dark/Light Modes:</strong> Automatically adapts to selected theme<br/>
+          <strong>✨ Floating Aesthetic:</strong> Hover effect that lifts and enhances glow
+        </p>
+      </div>
+    </div>
+
+    <!-- 6. ENHANCED COMPONENTS (v2.1+) -->
+    <div class="component-section">
+      <h2 class="component-section-title">✨ Enhanced Components v2.1+</h2>
+      <p style="color: var(--color-text-muted); margin-bottom: 1.5rem">
+        Advanced industrial-grade components with smooth animations, deep shadows, and interactive enhancements
+      </p>
+
+      <!-- Enhanced Combo Box -->
+      <div>
+        <h3 style="margin-bottom: 1rem">Enhanced Combo Box</h3>
+        <div style="max-width: 400px; margin-bottom: 2rem">
+          <div class="combo-box-enhanced">
+            <button class="combo-box-enhanced-trigger">
+              <span>Select Communication Protocol</span>
+              <span class="combo-box-enhanced-arrow">▼</span>
+            </button>
+            <div class="combo-box-enhanced-dropdown">
+              <div class="combo-box-enhanced-option selected">MQTT - Lightweight Pub/Sub</div>
+              <div class="combo-box-enhanced-option">Modbus TCP - Industrial Standard</div>
+              <div class="combo-box-enhanced-option">OPC UA - Enterprise Grade</div>
+              <div class="combo-box-enhanced-option">HTTP REST - Web Native</div>
+              <div class="combo-box-enhanced-option">CoAP - IoT Protocol</div>
+              <div class="combo-box-enhanced-option">gRPC - High Performance</div>
+            </div>
+          </div>
+        </div>
+        <div style="padding: 1rem; background-color: var(--color-bg-primary); border-radius: var(--radius-md); border-left: 3px solid var(--color-accent-yellow)">
+          <p style="color: var(--color-text-muted); margin: 0; font-size: 0.9rem">
+            <strong>Features:</strong> 12px border radius, gradient background with lighting direction (top-left to bottom-right), smooth fade + slide animation, grow effect on hover
+          </p>
+        </div>
+      </div>
+
+      <!-- Enhanced Chart Card -->
+      <div style="margin-top: 2rem">
+        <h3 style="margin-bottom: 1rem">Enhanced Chart Card</h3>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 1.5rem">
+          <div class="chart-card-enhanced">
+            <div class="chart-card-enhanced-header">Real-time Temperature Trend</div>
+            <div class="chart-card-enhanced-container" id="chart-container-1">
+              <!-- Chart will be rendered here -->
+            </div>
+          </div>
+          <div class="chart-card-enhanced">
+            <div class="chart-card-enhanced-header">System Load Profile</div>
+            <div class="chart-card-enhanced-container" id="chart-container-2">
+              <!-- Chart will be rendered here -->
+            </div>
+          </div>
+        </div>
+        <div style="margin-top: 1rem; padding: 1rem; background-color: var(--color-bg-primary); border-radius: var(--radius-md); border-left: 3px solid var(--color-accent-green)">
+          <p style="color: var(--color-text-muted); margin: 0; font-size: 0.9rem">
+            <strong>Features:</strong> Deep inner shadow (20px inset), floating line animation, smooth glow effect, 16px border radius, gradient background, hover lift effect
+          </p>
+        </div>
+      </div>
+
+      <!-- Enhanced Modal Buttons -->
+      <div style="margin-top: 2rem">
+        <h3 style="margin-bottom: 1rem">Enhanced Modal Components</h3>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem">
+          <button class="btn btn-primary size-md" onclick="window.EnhancedModal.showSettingValueModal('Set Temperature Threshold', '25.5', (val) => { alert('New value: ' + val); })">⚙️ Setting Value</button>
+          <button class="btn size-md" onclick="window.EnhancedModal.showConfigAddItemModal((fields) => { console.log('Config:', fields); })">➕ Config Add Item</button>
+          <button class="btn size-md" onclick="showModal('loading')">⏳ Loading State</button>
+          <button class="btn size-md" onclick="(function(){const el = document.querySelector('.progress-circle') || window.showProgressCircle(document.getElementById('chart-container-1'), 45); alert('Progress Circle: ' + (el ? el.textContent : 'not found'));})()">📊 Progress Circle</button>
+        </div>
+      </div>
+    </div>
+    <div class="component-section">
+      <h2 class="component-section-title">📐 Component Size Variants</h2>
+      
+      <div>
+        <h3 style="margin-bottom: 1rem">Buttons in All Sizes</h3>
+        <div style="display: flex; gap: 1rem; align-items: center; flex-wrap: wrap">
+          <button class="btn size-sm">Small</button>
+          <button class="btn size-md">Medium</button>
+          <button class="btn size-lg">Large</button>
+        </div>
+      </div>
+
+      <div style="margin-top: 2rem">
+        <h3 style="margin-bottom: 1rem">Checkboxes in All Sizes</h3>
+        <div style="display: flex; gap: 2rem; align-items: center; flex-wrap: wrap">
+          <label class="checkbox size-sm">
+            <input type="checkbox" />
+            <div class="checkbox-input">
+              <div class="checkbox-checkmark"></div>
+            </div>
+            <span class="checkbox-label">Small</span>
+          </label>
+          <label class="checkbox size-md">
+            <input type="checkbox" />
+            <div class="checkbox-input">
+              <div class="checkbox-checkmark"></div>
+            </div>
+            <span class="checkbox-label">Medium</span>
+          </label>
+          <label class="checkbox size-lg">
+            <input type="checkbox" />
+            <div class="checkbox-input">
+              <div class="checkbox-checkmark"></div>
+            </div>
+            <span class="checkbox-label">Large</span>
+          </label>
+        </div>
+      </div>
+
+      <div style="margin-top: 2rem">
+        <h3 style="margin-bottom: 1rem">LED Indicators in All Sizes</h3>
+        <div style="display: flex; gap: 2rem; align-items: center; flex-wrap: wrap">
+          <div class="led-indicator size-sm">
+            <div class="led-light state-green"></div>
+            <span class="led-label">Small</span>
+          </div>
+          <div class="led-indicator size-md">
+            <div class="led-light state-green"></div>
+            <span class="led-label">Medium</span>
+          </div>
+          <div class="led-indicator size-lg">
+            <div class="led-light state-green"></div>
+            <span class="led-label">Large</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 6. MODALS & NOTIFICATIONS -->
+    <div class="component-section">
+      <h2 class="component-section-title">⚠️ Modals & Notifications</h2>
+
+      <!-- Progress Bars -->
+      <div>
+        <h3 style="margin-bottom: 1rem">Progress Bars</h3>
+        <div style="background-color: var(--color-bg-primary); padding: 1.5rem; border-radius: var(--radius-md); margin-bottom: 1.5rem">
+          <div class="progress-container">
+            <span class="progress-label">Loading</span>
+            <div class="progress-bar-wrapper">
+              <div class="progress-bar">
+                <div class="progress-bar-fill animated" style="width: 65%"></div>
+              </div>
+            </div>
+            <span class="progress-value">65%</span>
+          </div>
+          <div class="progress-container">
+            <span class="progress-label">Success</span>
+            <div class="progress-bar-wrapper">
+              <div class="progress-bar">
+                <div class="progress-bar-fill success" style="width: 100%"></div>
+              </div>
+            </div>
+            <span class="progress-value">100%</span>
+          </div>
+          <div class="progress-container">
+            <span class="progress-label">Warning</span>
+            <div class="progress-bar-wrapper">
+              <div class="progress-bar">
+                <div class="progress-bar-fill warning" style="width: 75%"></div>
+              </div>
+            </div>
+            <span class="progress-value">75%</span>
+          </div>
+          <div class="progress-container">
+            <span class="progress-label">Error</span>
+            <div class="progress-bar-wrapper">
+              <div class="progress-bar">
+                <div class="progress-bar-fill error" style="width: 45%"></div>
+              </div>
+            </div>
+            <span class="progress-value">45%</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Modal Buttons -->
+      <div>
+        <h3 style="margin-bottom: 1rem">Modal Examples (Click buttons below)</h3>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem">
+          <button class="btn btn-primary size-md" onclick="showModal('success')">🎉 Success</button>
+          <button class="btn btn-danger size-md" onclick="showModal('error')">❌ Error</button>
+          <button class="btn size-md" onclick="showModal('warning')">⚠️ Warning</button>
+          <button class="btn size-md" onclick="showModal('loading')">⏳ Loading</button>
+          <button class="btn size-md" onclick="showToast('success')">✓ Success Toast</button>
+          <button class="btn size-md" onclick="showToast('error')">✗ Error Toast</button>
+        </div>
+      </div>
+
+      <div style="margin-top: 1.5rem; padding: 1rem; background-color: var(--color-bg-primary); border-radius: var(--radius-md); border-left: 3px solid var(--color-accent-yellow)">
+        <p style="color: var(--color-text-muted); margin: 0; font-size: 0.9rem; line-height: 1.6">
+          <strong>📋 Modal Types:</strong> Success (confirmation), Error (failed actions), Warning (attention needed), Loading (in progress)<br/>
+          <strong>🔔 Toast Notifications:</strong> Non-blocking alerts that appear in bottom-right corner<br/>
+          <strong>📊 Progress Bars:</strong> Visual feedback with status variants (success/warning/error/info)<br/>
+          <strong>✨ Animations:</strong> Smooth scale + fade in/out, pulsing glow on progress fill
+        </p>
+      </div>
+    </div>
+
+    <!-- 7. DESIGN SYSTEM INFO -->
+    <div class="component-section">
+      <h2 class="component-section-title">🎨 Design System</h2>
+      
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1rem">
+        <div style="padding: 1rem; background-color: var(--color-bg-primary); border-radius: var(--radius-md)">
+          <h4 style="color: var(--color-accent-green); margin-bottom: 0.5rem">Colors</h4>
+          <p style="color: var(--color-text-muted); font-size: 0.9rem">
+            • Primary: Accent Green (#00ffcc)<br/>
+            • Alert: Accent Red (#ff3b3b)<br/>
+            • Warning: Accent Yellow (#ffaa00)<br/>
+            • Background: #0f1117<br/>
+            • Surface: #1a1d26
+          </p>
+        </div>
+
+        <div style="padding: 1rem; background-color: var(--color-bg-primary); border-radius: var(--radius-md)">
+          <h4 style="color: var(--color-accent-green); margin-bottom: 0.5rem">Shadows & Glows</h4>
+          <p style="color: var(--color-text-muted); font-size: 0.9rem">
+            • Outer: Directional (TL→BR)<br/>
+            • Inner: Recessed effect<br/>
+            • Glow: Soft & Strong variants<br/>
+            • Center-spread: Animated pulse
+          </p>
+        </div>
+
+        <div style="padding: 1rem; background-color: var(--color-bg-primary); border-radius: var(--radius-md)">
+          <h4 style="color: var(--color-accent-green); margin-bottom: 0.5rem">Animations</h4>
+          <p style="color: var(--color-text-muted); font-size: 0.9rem">
+            • Fast: 150ms (interactions)<br/>
+            • Base: 200ms (default)<br/>
+            • Slow: 300ms (complex)<br/>
+            • Cubic-bezier easing
+          </p>
+        </div>
+      </div>
+
+      <div style="margin-top: 1.5rem; padding: 1rem; background-color: var(--color-bg-primary); border-radius: var(--radius-md); border-left: 3px solid var(--color-accent-green)">
+        <h4 style="color: var(--color-accent-green); margin-bottom: 0.5rem">Key Features</h4>
+        <ul style="color: var(--color-text-muted); font-size: 0.9rem; line-height: 1.8">
+          <li>✓ 14 reusable components (form, data, industrial, premium)</li>
+          <li>✓ 3 size variants (Small, Medium, Large)</li>
+          <li>✓ Multiple state variations per component</li>
+          <li>✓ Mobile-first responsive design</li>
+          <li>✓ Dark & Light mode support</li>
+          <li>✓ 3D neumorphism with shadows & glows</li>
+          <li>✓ Animated status indicators & effects</li>
+          <li>✓ Smooth 150-300ms animations</li>
+          <li>✓ Framework-ready architecture</li>
+          <li>✓ Industrial UI focused (MQTT, Modbus, OPC UA ready)</li>
+          <li>✓ Keyboard navigation & accessibility</li>
+        </ul>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- MODALS -->
+  <div id="modal-overlay" class="modal-overlay" onclick="closeModal()">
+    <div class="modal" onclick="event.stopPropagation()">
+      <div class="modal-header">
+        <div class="modal-icon" id="modal-icon">🎉</div>
+        <h2 id="modal-title">Success</h2>
+        <button class="modal-close" onclick="closeModal()">×</button>
+      </div>
+      <div class="modal-body" id="modal-body">
+        Operation completed successfully!
+      </div>
+      <div class="modal-footer">
+        <button class="modal-btn" onclick="closeModal()">Cancel</button>
+        <button class="modal-btn primary" onclick="closeModal()">Confirm</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- TOAST NOTIFICATION -->
+  <div id="toast" class="toast">
+    <div class="toast-icon">✓</div>
+    <div class="toast-content">
+      <div class="toast-title">Success</div>
+      <div class="toast-message">Operation completed</div>
+    </div>
+    <button class="toast-close" onclick="closeToast()">×</button>
+  </div>
+
+  <!-- FOOTER -->
+  <div class="demo-footer">
+    <p class="footer-text">
+      🎨 3D Web UI Component System v2.0+ — Industrial Edition with Premium Components
+    </p>
+    <div class="footer-info">
+      <div class="info-item">
+        <span>📦 Components:</span>
+        <strong>14 (13+1 premium)</strong>
+      </div>
+      <div class="info-item">
+        <span>📐 Sizes:</span>
+        <strong>3 variants</strong>
+      </div>
+      <div class="info-item">
+        <span>🌓 Themes:</span>
+        <strong>Dark & Light</strong>
+      </div>
+      <div class="info-item">
+        <span>⚡ Animations:</span>
+        <strong>150-300ms</strong>
+      </div>
+      <div class="info-item">
+        <span>📱 Responsive:</span>
+        <strong>Mobile-first</strong>
+      </div>
+      <div class="info-item">
+        <span>♿ Accessibility:</span>
+        <strong>WCAG 2.1</strong>
+      </div>
+    </div>
+    <p style="margin-top: 1.5rem; font-size: 0.85rem; color: var(--color-text-muted)">
+      Built with vanilla HTML, CSS, and JavaScript. Supports dark/light modes, industrial protocols, and framework integration (Vue, React, Angular).
+    </p>
+  </div>
+
+  <!-- SCRIPTS -->
+  <script src="scripts.js"></script>
+
+  <!-- Enhanced Components Initialization -->
+  <script>
+    // Initialize enhanced chart cards with sample data
+    document.addEventListener('DOMContentLoaded', () => {
+      // Chart 1: Temperature trend
+      const tempData = [25, 26, 27, 26.5, 28, 27, 25.5];
+      const chart1Container = document.getElementById('chart-container-1');
+      if (chart1Container) {
+        window.ChartCardEnhanced.createAnimatedChart(chart1Container, tempData);
+      }
+
+      // Chart 2: Load profile
+      const loadData = [30, 45, 35, 52, 48, 42, 38];
+      const chart2Container = document.getElementById('chart-container-2');
+      if (chart2Container) {
+        window.ChartCardEnhanced.createAnimatedChart(chart2Container, loadData);
+      }
+    });
+  </script>
+
+  <!-- Console hints -->
+  <script>
+    console.log('%c🎨 3D Web UI Component System v2.0+', 'color: #00ffcc; font-size: 16px; font-weight: bold');
+    console.log('%cIndustrial Edition with Premium Display Components', 'color: #3aa0ff; font-size: 12px');
+    console.log('%c💎 NEW: Monitor Card Value component with glow borders & animated status bars', 'color: #00ffcc; font-size: 11px; font-weight: bold');
+    console.log('%cTry these commands in the console:', 'color: #00ffcc');
+    console.log('%cComponentSystem.logStates() - Log all active component states', 'color: #ffaa00');
+    console.log('%cComponentSystem.createButton({text: "Custom", size: "lg"}) - Create components programmatically', 'color: #ffaa00');
+    console.log('%cAll 14 components ready! 12 industrial + 1 premium display. Toggle theme via button. 🚀', 'color: #00ffcc; font-weight: bold');
+  </script>
+</body>
+</html>

@@ -1,0 +1,787 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Configuration | Industrial Edge Gateway</title>
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="components.css" />
+  <style>
+    body {
+      background-color: var(--color-bg-primary);
+      color: var(--color-text-primary);
+    }
+
+    .main-container {
+      display: grid;
+      grid-template-columns: 250px 1fr;
+      gap: 0;
+      min-height: 100vh;
+    }
+
+    /* SIDEBAR */
+    .sidebar {
+      background-color: var(--color-bg-surface);
+      box-shadow: var(--shadow-outer-md);
+      padding: 1.5rem 0;
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      overflow-y: auto;
+    }
+
+    .logo {
+      padding: 0 1.5rem;
+      margin-bottom: 2rem;
+      border-bottom: 2px solid rgba(0, 255, 204, 0.2);
+      padding-bottom: 1rem;
+    }
+
+    .logo h2 {
+      color: var(--color-accent-green);
+      font-size: 1.2rem;
+      margin: 0;
+      text-align: center;
+    }
+
+    .nav-menu {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+
+    .nav-menu li {
+      margin: 0.5rem 0;
+    }
+
+    .nav-link {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0.75rem 1.5rem;
+      color: var(--color-text-secondary);
+      text-decoration: none;
+      transition: all 0.2s;
+      border-left: 3px solid transparent;
+      cursor: pointer;
+      font-weight: 500;
+    }
+
+    .nav-link:hover,
+    .nav-link.active {
+      color: var(--color-accent-green);
+      background-color: var(--color-bg-highlight);
+      border-left-color: var(--color-accent-green);
+      box-shadow: inset var(--shadow-inner-sm);
+    }
+
+    .nav-icon {
+      font-size: 1.2rem;
+      width: 24px;
+      display: inline-flex;
+      justify-content: center;
+    }
+
+    /* TOP BAR */
+    .top-bar {
+      background-color: var(--color-bg-surface);
+      padding: 1rem 2rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      box-shadow: var(--shadow-outer-md);
+      border-bottom: 2px solid rgba(0, 255, 204, 0.2);
+    }
+
+    .top-bar-title {
+      font-size: 1.5rem;
+      color: var(--color-accent-green);
+      margin: 0;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .top-bar-controls {
+      display: flex;
+      gap: 1rem;
+      align-items: center;
+    }
+
+    .control-btn {
+      padding: 0.5rem 1rem;
+      background-color: var(--color-bg-highlight);
+      border: 1px solid rgba(0, 255, 204, 0.3);
+      border-radius: var(--radius-sm);
+      color: var(--color-text-secondary);
+      cursor: pointer;
+      transition: all 0.2s;
+      font-weight: 600;
+    }
+
+    .control-btn:hover {
+      color: var(--color-accent-green);
+      border-color: var(--color-accent-green);
+      box-shadow: var(--glow-soft);
+    }
+
+    /* CONTENT AREA */
+    .content-area {
+      display: flex;
+      flex-direction: column;
+      overflow-y: auto;
+    }
+
+    .page-content {
+      padding: 2rem;
+    }
+
+    /* TABS */
+    .config-tabs {
+      display: flex;
+      gap: 0.5rem;
+      margin-bottom: 2rem;
+      border-bottom: 2px solid rgba(0, 255, 204, 0.2);
+      flex-wrap: wrap;
+    }
+
+    .config-tab {
+      padding: 1rem 1.5rem;
+      background: none;
+      border: none;
+      color: var(--color-text-secondary);
+      cursor: pointer;
+      font-size: 1rem;
+      font-weight: 600;
+      transition: all 0.3s;
+      border-bottom: 3px solid transparent;
+      position: relative;
+      top: 2px;
+    }
+
+    .config-tab:hover {
+      color: var(--color-accent-green);
+      background-color: var(--color-bg-surface);
+      border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+    }
+
+    .config-tab.active {
+      color: var(--color-accent-green);
+      border-bottom-color: var(--color-accent-green);
+      background-color: var(--color-bg-surface);
+      box-shadow: 0 -2px 8px rgba(0, 255, 204, 0.2);
+    }
+
+    .tab-content {
+      display: none;
+    }
+
+    .tab-content.active {
+      display: block;
+      animation: pop-in 0.3s ease-out;
+    }
+
+    /* FORM SECTIONS */
+    .form-section {
+      background-color: var(--color-bg-surface);
+      padding: 2rem;
+      border-radius: var(--radius-md);
+      box-shadow: var(--shadow-outer-md);
+      margin-bottom: 2rem;
+    }
+
+    .section-title {
+      font-size: 1.3rem;
+      color: var(--color-accent-green);
+      margin-bottom: 1.5rem;
+      padding-bottom: 1rem;
+      border-bottom: 2px solid rgba(0, 255, 204, 0.2);
+    }
+
+    .form-group {
+      margin-bottom: 1.5rem;
+    }
+
+    .form-label {
+      display: block;
+      color: var(--color-text-secondary);
+      font-size: 0.9rem;
+      font-weight: 600;
+      margin-bottom: 0.5rem;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .form-input {
+      width: 100%;
+      padding: 0.75rem;
+      background-color: var(--color-bg-primary);
+      border: 1px solid rgba(0, 255, 204, 0.3);
+      border-radius: var(--radius-sm);
+      color: var(--color-text-primary);
+      font-size: 0.95rem;
+      transition: all 0.2s;
+      box-shadow: inset var(--shadow-inner-sm);
+    }
+
+    .form-input:hover {
+      border-color: rgba(0, 255, 204, 0.6);
+    }
+
+    .form-input:focus {
+      outline: none;
+      border-color: var(--color-accent-green);
+      box-shadow: inset var(--shadow-inner-sm), 0 0 12px rgba(0, 255, 204, 0.3);
+    }
+
+    .form-select {
+      width: 100%;
+      padding: 0.75rem;
+      background-color: var(--color-bg-primary);
+      border: 1px solid rgba(0, 255, 204, 0.3);
+      border-radius: var(--radius-sm);
+      color: var(--color-text-primary);
+      font-size: 0.95rem;
+      cursor: pointer;
+      box-shadow: inset var(--shadow-inner-sm);
+    }
+
+    .form-select:focus {
+      outline: none;
+      border-color: var(--color-accent-green);
+      box-shadow: inset var(--shadow-inner-sm), 0 0 12px rgba(0, 255, 204, 0.3);
+    }
+
+    /* PARAMETER TABLE */
+    .param-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 1rem;
+    }
+
+    .param-table thead {
+      background-color: var(--color-bg-highlight);
+    }
+
+    .param-table th {
+      padding: 0.75rem;
+      text-align: left;
+      color: var(--color-accent-green);
+      font-weight: 600;
+      border-bottom: 2px solid rgba(0, 255, 204, 0.3);
+      font-size: 0.85rem;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .param-table td {
+      padding: 0.75rem;
+      border-bottom: 1px solid rgba(0, 255, 204, 0.2);
+      color: var(--color-text-secondary);
+      font-family: 'Courier New', monospace;
+      font-size: 0.9rem;
+    }
+
+    .param-table tbody tr:hover {
+      background-color: var(--color-bg-highlight);
+    }
+
+    /* ACTION BUTTONS */
+    .button-group {
+      display: flex;
+      gap: 1rem;
+      flex-wrap: wrap;
+      margin-top: 1.5rem;
+    }
+
+    .action-btn {
+      padding: 0.75rem 1.5rem;
+      background-color: var(--color-bg-highlight);
+      border: 2px solid var(--color-accent-green);
+      border-radius: var(--radius-md);
+      color: var(--color-accent-green);
+      cursor: pointer;
+      font-weight: 600;
+      transition: all 0.3s;
+      box-shadow: var(--shadow-outer-sm);
+    }
+
+    .action-btn:hover {
+      background-color: var(--color-accent-green);
+      color: var(--color-bg-primary);
+      box-shadow: var(--glow-strong);
+      transform: scale(1.05);
+    }
+
+    .action-btn.danger {
+      border-color: var(--color-accent-red);
+      color: var(--color-accent-red);
+    }
+
+    .action-btn.danger:hover {
+      background-color: var(--color-accent-red);
+      color: white;
+    }
+
+    /* RESPONSIVE */
+    @media (max-width: 1024px) {
+      .main-container {
+        grid-template-columns: 1fr;
+      }
+
+      .sidebar {
+        position: fixed;
+        left: 0;
+        top: 0;
+        height: auto;
+        width: 100%;
+        z-index: 1000;
+      }
+
+      .logo {
+        display: none;
+      }
+
+      .nav-menu {
+        display: flex;
+        gap: 0;
+        overflow-x: auto;
+      }
+
+      .nav-menu li {
+        margin: 0;
+      }
+
+      .content-area {
+        margin-top: 60px;
+      }
+    }
+
+    @media (max-width: 768px) {
+      .page-content {
+        padding: 1rem;
+      }
+
+      .form-section {
+        padding: 1.5rem;
+      }
+
+      .config-tabs {
+        overflow-x: auto;
+      }
+
+      .config-tab {
+        padding: 0.75rem 1rem;
+        font-size: 0.9rem;
+      }
+
+      .top-bar {
+        padding: 1rem;
+        flex-direction: column;
+        gap: 1rem;
+      }
+
+      .button-group {
+        flex-direction: column;
+      }
+
+      .action-btn {
+        width: 100%;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="main-container">
+    <!-- SIDEBAR -->
+    <aside class="sidebar">
+      <div class="logo">
+        <h2>⚙️ Dashboard</h2>
+      </div>
+      <nav>
+        <ul class="nav-menu">
+          <li><a href="index.html" class="nav-link"><span class="nav-icon">🏠</span> Home</a></li>
+          <li><a href="monitor.html" class="nav-link"><span class="nav-icon">📊</span> Monitor</a></li>
+          <li><a href="config.html" class="nav-link active"><span class="nav-icon">⚙️</span> Config</a></li>
+          <li><a href="mapping.html" class="nav-link"><span class="nav-icon">🔗</span> Mapping</a></li>
+          <li style="margin-top: 2rem; border-top: 1px solid rgba(0, 255, 204, 0.2); padding-top: 1rem">
+            <a href="#" class="nav-link" onclick="toggleTheme(); return false;"><span class="nav-icon" id="theme-icon">🌙</span> <span id="theme-label">Dark Mode</span></a>
+          </li>
+        </ul>
+      </nav>
+    </aside>
+
+    <!-- MAIN CONTENT -->
+    <div class="content-area">
+      <!-- TOP BAR -->
+      <div class="top-bar">
+        <h1 class="top-bar-title">⚙️ Protocol Configuration</h1>
+        <div class="top-bar-controls">
+          <button class="control-btn" onclick="saveConfiguration()">💾 Save Config</button>
+        </div>
+      </div>
+
+      <!-- PAGE CONTENT -->
+      <div class="page-content">
+        <!-- CONFIGURATION TABS -->
+        <div class="config-tabs">
+          <button class="config-tab active" onclick="switchTab(event, 'plc')">
+            📡 PLC Protocol
+          </button>
+          <button class="config-tab" onclick="switchTab(event, 'opcua')">
+            🔗 OPC UA
+          </button>
+          <button class="config-tab" onclick="switchTab(event, 'mqtt')">
+            🌐 MQTT
+          </button>
+          <button class="config-tab" onclick="switchTab(event, 'network')">
+            🌍 Network
+          </button>
+        </div>
+
+        <!-- ========== PLC TAB ========== -->
+        <div id="plc" class="tab-content active">
+          <div class="form-section">
+            <h3 class="section-title">📡 Modbus RTU Configuration</h3>
+            
+            <div class="form-group">
+              <label class="form-label">Protocol Type</label>
+              <select class="form-select">
+                <option selected>Modbus RTU</option>
+                <option>Modbus TCP</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Port</label>
+              <input type="text" class="form-input" value="/dev/ttyUSB0" placeholder="/dev/ttyUSB0" />
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Baud Rate</label>
+              <select class="form-select">
+                <option>9600</option>
+                <option selected>19200</option>
+                <option>38400</option>
+                <option>115200</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Data Bits</label>
+              <select class="form-select">
+                <option>7</option>
+                <option selected>8</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Stop Bits</label>
+              <select class="form-select">
+                <option selected>1</option>
+                <option>2</option>
+              </select>
+            </div>
+
+            <h3 class="section-title" style="margin-top: 2rem">Registered Modbus Devices</h3>
+            <table class="param-table">
+              <thead>
+                <tr>
+                  <th>Device ID</th>
+                  <th>Slave Address</th>
+                  <th>Device Name</th>
+                  <th>Status</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>MOD-001</td>
+                  <td>01</td>
+                  <td>PLC Main</td>
+                  <td><span style="color: var(--color-accent-green)">✓ Connected</span></td>
+                  <td><button class="control-btn" style="padding: 0.4rem 0.8rem; font-size: 0.85rem;">Edit</button></td>
+                </tr>
+                <tr>
+                  <td>MOD-002</td>
+                  <td>02</td>
+                  <td>Temperature Module</td>
+                  <td><span style="color: var(--color-accent-green)">✓ Connected</span></td>
+                  <td><button class="control-btn" style="padding: 0.4rem 0.8rem; font-size: 0.85rem;">Edit</button></td>
+                </tr>
+                <tr>
+                  <td>MOD-003</td>
+                  <td>03</td>
+                  <td>Pressure Sensor</td>
+                  <td><span style="color: var(--color-accent-red)">✗ Disconnected</span></td>
+                  <td><button class="control-btn" style="padding: 0.4rem 0.8rem; font-size: 0.85rem;">Edit</button></td>
+                </tr>
+              </tbody>
+            </table>
+
+            <div class="button-group">
+              <button class="action-btn" onclick="addDevice()">➕ Add Device</button>
+              <button class="action-btn" onclick="testConnection()">🧪 Test Connection</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- ========== OPC UA TAB ========== -->
+        <div id="opcua" class="tab-content">
+          <div class="form-section">
+            <h3 class="section-title">🔗 OPC UA Configuration</h3>
+
+            <div class="form-group">
+              <label class="form-label">OPC UA Mode</label>
+              <select class="form-select">
+                <option selected>Client</option>
+                <option>Server</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Server Endpoint URL</label>
+              <input type="text" class="form-input" placeholder="opc.tcp://localhost:4840" />
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Security Policy</label>
+              <select class="form-select">
+                <option selected>None</option>
+                <option>Basic128Rsa15</option>
+                <option>Basic256</option>
+                <option>Basic256Sha256</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Username</label>
+              <input type="text" class="form-input" placeholder="admin" />
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Password</label>
+              <input type="password" class="form-input" placeholder="••••••••" />
+            </div>
+
+            <h3 class="section-title" style="margin-top: 2rem">Subscribed OPC UA Nodes</h3>
+            <table class="param-table">
+              <thead>
+                <tr>
+                  <th>Node ID</th>
+                  <th>Display Name</th>
+                  <th>Data Type</th>
+                  <th>Value</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>ns=2;i=5001</td>
+                  <td>Temperature</td>
+                  <td>Double</td>
+                  <td>24.5°C</td>
+                  <td><button class="control-btn" style="padding: 0.4rem 0.8rem; font-size: 0.85rem;">Edit</button></td>
+                </tr>
+                <tr>
+                  <td>ns=2;i=5002</td>
+                  <td>Pressure</td>
+                  <td>Float</td>
+                  <td>1013 hPa</td>
+                  <td><button class="control-btn" style="padding: 0.4rem 0.8rem; font-size: 0.85rem;">Edit</button></td>
+                </tr>
+              </tbody>
+            </table>
+
+            <div class="button-group">
+              <button class="action-btn" onclick="browseOpcUA()">🔍 Browse Nodes</button>
+              <button class="action-btn" onclick="testConnection()">🧪 Test Connection</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- ========== MQTT TAB ========== -->
+        <div id="mqtt" class="tab-content">
+          <div class="form-section">
+            <h3 class="section-title">🌐 MQTT Configuration</h3>
+
+            <div class="form-group">
+              <label class="form-label">Broker Address</label>
+              <input type="text" class="form-input" placeholder="mqtt.broker.com" />
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Broker Port</label>
+              <input type="number" class="form-input" value="1883" />
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Client ID</label>
+              <input type="text" class="form-input" placeholder="edge-gateway-001" />
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Username</label>
+              <input type="text" class="form-input" placeholder="mqtt_user" />
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Password</label>
+              <input type="password" class="form-input" placeholder="••••••••" />
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">QoS Level</label>
+              <select class="form-select">
+                <option>0 - At most once</option>
+                <option selected>1 - At least once</option>
+                <option>2 - Exactly once</option>
+              </select>
+            </div>
+
+            <h3 class="section-title" style="margin-top: 2rem">MQTT Topics</h3>
+            <table class="param-table">
+              <thead>
+                <tr>
+                  <th>Topic</th>
+                  <th>Type</th>
+                  <th>QoS</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>sensor/temperature</td>
+                  <td>Subscribe</td>
+                  <td>1</td>
+                  <td><button class="control-btn" style="padding: 0.4rem 0.8rem; font-size: 0.85rem;">Remove</button></td>
+                </tr>
+                <tr>
+                  <td>sensor/humidity</td>
+                  <td>Subscribe</td>
+                  <td>1</td>
+                  <td><button class="control-btn" style="padding: 0.4rem 0.8rem; font-size: 0.85rem;">Remove</button></td>
+                </tr>
+              </tbody>
+            </table>
+
+            <div class="button-group">
+              <button class="action-btn" onclick="addTopic()">➕ Add Topic</button>
+              <button class="action-btn" onclick="testConnection()">🧪 Test Connection</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- ========== NETWORK TAB ========== -->
+        <div id="network" class="tab-content">
+          <div class="form-section">
+            <h3 class="section-title">🌍 Network Settings</h3>
+
+            <div class="form-group">
+              <label class="form-label">IP Address</label>
+              <input type="text" class="form-input" value="192.168.1.100" />
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Subnet Mask</label>
+              <input type="text" class="form-input" value="255.255.255.0" />
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Gateway</label>
+              <input type="text" class="form-input" value="192.168.1.1" />
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">DNS Server 1</label>
+              <input type="text" class="form-input" value="8.8.8.8" />
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">DNS Server 2</label>
+              <input type="text" class="form-input" value="8.8.4.4" />
+            </div>
+
+            <div class="button-group">
+              <button class="action-btn" onclick="applyNetwork()">✓ Apply Settings</button>
+              <button class="action-btn" onclick="resetNetwork()">↻ Reset</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="scripts.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      const savedTheme = localStorage.getItem('theme') || 'dark';
+      setTheme(savedTheme);
+    });
+
+    function switchTab(event, tabName) {
+      // Hide all tabs
+      const tabs = document.querySelectorAll('.tab-content');
+      tabs.forEach(tab => tab.classList.remove('active'));
+
+      // Remove active class from all buttons
+      const buttons = document.querySelectorAll('.config-tab');
+      buttons.forEach(btn => btn.classList.remove('active'));
+
+      // Show selected tab
+      document.getElementById(tabName).classList.add('active');
+      event.target.classList.add('active');
+    }
+
+    function saveConfiguration() {
+      alert('Configuration saved successfully!');
+    }
+
+    function addDevice() {
+      alert('Add new device dialog would open here');
+    }
+
+    function testConnection() {
+      alert('Testing connection...');
+    }
+
+    function browseOpcUA() {
+      alert('Opening OPC UA node browser...');
+    }
+
+    function addTopic() {
+      alert('Add MQTT topic dialog would open here');
+    }
+
+    function applyNetwork() {
+      alert('Applying network settings...');
+    }
+
+    function resetNetwork() {
+      alert('Network settings reset to default');
+    }
+
+    function toggleTheme() {
+      const current = document.documentElement.getAttribute('data-theme') || 'dark';
+      const newTheme = current === 'dark' ? 'light' : 'dark';
+      setTheme(newTheme);
+    }
+
+    function setTheme(theme) {
+      document.documentElement.setAttribute('data-theme', theme);
+      localStorage.setItem('theme', theme);
+      document.documentElement.style.colorScheme = theme;
+      
+      const icon = document.getElementById('theme-icon');
+      const label = document.getElementById('theme-label');
+      if(theme === 'light') {
+        icon.textContent = '☀️';
+        label.textContent = 'Light Mode';
+      } else {
+        icon.textContent = '🌙';
+        label.textContent = 'Dark Mode';
+      }
+    }
+  </script>
+</body>
+</html>

@@ -51,7 +51,7 @@ config/scripts/smartlocker/data/*.json.tmp
 config/scripts/
 config/script_Tests/
 request/
-docs/
+
 # Ubuntu build via scripts/build-ubuntu.sh (its own vcpkg checkout and cache)
 .vcpkg/
 .vcpkg-cache/

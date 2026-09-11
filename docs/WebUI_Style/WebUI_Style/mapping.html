@@ -1,0 +1,1740 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>IIoT Data Mapping Engine | Industrial Gateway</title>
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="components.css" />
+  <style>
+    body {
+      background-color: var(--color-bg-primary);
+      color: var(--color-text-primary);
+      margin: 0;
+      overflow: hidden;
+    }
+
+    .mapping-container {
+      display: grid;
+      grid-template-columns: 280px 1fr 320px;
+      grid-template-rows: 70px 1fr 200px;
+      gap: 1px;
+      height: 100vh;
+      background: rgba(0, 255, 204, 0.1);
+    }
+
+    /* HEADER */
+    .mapping-header {
+      grid-column: 1 / -1;
+      background-color: var(--color-bg-surface);
+      border-bottom: 2px solid rgba(0, 255, 204, 0.2);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 2rem;
+      box-shadow: var(--shadow-outer-md);
+    }
+
+    .header-title {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    .header-title h1 {
+      margin: 0;
+      font-size: 1.5rem;
+      color: var(--color-accent-green);
+    }
+
+    .header-controls {
+      display: flex;
+      gap: 1rem;
+      align-items: center;
+    }
+
+    .header-btn {
+      padding: 0.6rem 1.2rem;
+      background-color: var(--color-bg-primary);
+      border: 1px solid rgba(0, 255, 204, 0.3);
+      border-radius: var(--radius-md);
+      color: var(--color-accent-green);
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      font-size: 0.9rem;
+    }
+
+    .header-btn:hover {
+      background-color: var(--color-bg-highlight);
+      border-color: var(--color-accent-green);
+      box-shadow: var(--glow-soft);
+    }
+
+    .header-btn.primary {
+      background-color: var(--color-accent-green);
+      color: var(--color-bg-primary);
+      border-color: var(--color-accent-green);
+    }
+
+    .header-btn.primary:hover {
+      box-shadow: var(--glow-strong);
+      transform: translateY(-2px);
+    }
+
+    /* PANELS */
+    .sources-panel, .config-panel, .monitor-panel {
+      background-color: var(--color-bg-surface);
+      overflow-y: auto;
+    }
+
+    .mapping-canvas {
+      background: linear-gradient(135deg, var(--color-bg-primary), rgba(0, 255, 204, 0.02));
+      position: relative;
+      overflow: hidden;
+    }
+
+    /* SOURCES PANEL (LEFT) */
+    .sources-panel {
+      grid-row: 2;
+      grid-column: 1;
+      border-right: 1px solid rgba(0, 255, 204, 0.1);
+      display: flex;
+      flex-direction: column;
+    }
+
+    .panel-header {
+      padding: 1.5rem 1rem;
+      border-bottom: 2px solid rgba(0, 255, 204, 0.2);
+      background: linear-gradient(135deg, var(--color-bg-surface), rgba(0, 255, 204, 0.05));
+    }
+
+    .panel-header h3 {
+      margin: 0;
+      color: var(--color-accent-green);
+      font-size: 1.1rem;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .panel-search {
+      margin: 1rem;
+      position: relative;
+    }
+
+    .panel-search input {
+      width: 100%;
+      padding: 0.6rem;
+      background-color: var(--color-bg-primary);
+      border: 1px solid rgba(0, 255, 204, 0.2);
+      border-radius: var(--radius-sm);
+      color: var(--color-text-primary);
+      font-size: 0.9rem;
+    }
+
+    .panel-search input::placeholder {
+      color: var(--color-text-muted);
+    }
+
+    .panel-content {
+      flex: 1;
+      overflow-y: auto;
+      padding: 1rem;
+    }
+
+    .device-item {
+      background-color: var(--color-bg-primary);
+      border: 1px solid rgba(0, 255, 204, 0.1);
+      border-radius: var(--radius-md);
+      padding: 1rem;
+      margin-bottom: 0.8rem;
+      cursor: move;
+      transition: all 0.2s;
+      border-left: 3px solid var(--color-accent-green);
+      user-select: none;
+    }
+
+    .device-item:hover {
+      background-color: var(--color-bg-highlight);
+      border-color: var(--color-accent-green);
+      box-shadow: var(--glow-soft);
+      transform: translateX(4px);
+    }
+
+    .device-type {
+      font-size: 0.75rem;
+      color: var(--color-accent-yellow);
+      text-transform: uppercase;
+      font-weight: 600;
+      margin-bottom: 0.3rem;
+    }
+
+    .device-name {
+      font-weight: 600;
+      color: var(--color-accent-green);
+      margin-bottom: 0.4rem;
+      font-size: 0.95rem;
+    }
+
+    .device-info {
+      font-size: 0.85rem;
+      color: var(--color-text-muted);
+      line-height: 1.4;
+    }
+
+    .tag-list {
+      margin-top: 0.8rem;
+      padding-top: 0.8rem;
+      border-top: 1px solid rgba(0, 255, 204, 0.1);
+      font-size: 0.8rem;
+    }
+
+    .tag-item {
+      background-color: rgba(0, 255, 204, 0.05);
+      padding: 0.4rem 0.6rem;
+      margin-bottom: 0.3rem;
+      border-radius: var(--radius-sm);
+      color: var(--color-text-secondary);
+      border-left: 2px solid var(--color-accent-cyan);
+    }
+
+    /* MAPPING CANVAS (CENTER) */
+    .mapping-canvas {
+      grid-row: 2;
+      grid-column: 2;
+      display: flex;
+      flex-direction: column;
+      padding: 2rem;
+      background: linear-gradient(135deg, var(--color-bg-primary), rgba(0, 255, 204, 0.02));
+      position: relative;
+      overflow: hidden;
+    }
+
+    .canvas-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1.5rem;
+      padding-bottom: 1rem;
+      border-bottom: 1px solid rgba(0, 255, 204, 0.15);
+    }
+
+    .canvas-title {
+      font-size: 1.2rem;
+      font-weight: 600;
+      color: var(--color-accent-green);
+    }
+
+    .canvas-stats {
+      display: flex;
+      gap: 1rem;
+      font-size: 0.9rem;
+    }
+
+    .canvas-stat {
+      display: flex;
+      align-items: center;
+      gap: 0.3rem;
+      color: var(--color-text-secondary);
+    }
+
+    .canvas-stat-value {
+      color: var(--color-accent-green);
+      font-weight: 600;
+      font-size: 1.1rem;
+    }
+
+    .canvas-content {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      position: relative;
+    }
+
+    .canvas-svg-wrapper {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      min-height: 300px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .canvas-svg-wrapper svg {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 1;
+    }
+
+    .canvas-flow {
+      display: flex;
+      justify-content: space-around;
+      align-items: center;
+      width: 100%;
+      gap: 2rem;
+      z-index: 2;
+      position: relative;
+    }
+
+    .canvas-section {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.8rem;
+      flex: 1;
+    }
+
+    .canvas-section-title {
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--color-text-muted);
+      font-weight: 600;
+    }
+
+    .canvas-items {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.6rem;
+      justify-content: center;
+      min-height: 80px;
+      align-content: flex-start;
+    }
+
+    .canvas-item {
+      background: linear-gradient(135deg, var(--color-bg-surface), rgba(0, 255, 204, 0.08));
+      border: 1px solid rgba(0, 255, 204, 0.2);
+      border-radius: var(--radius-md);
+      padding: 0.6rem 1rem;
+      font-size: 0.85rem;
+      color: var(--color-text-secondary);
+      text-align: center;
+      min-width: 100px;
+      position: relative;
+      transition: all 0.3s;
+      box-shadow: inset var(--shadow-inner-sm);
+    }
+
+    .canvas-item:hover {
+      border-color: var(--color-accent-green);
+      background: linear-gradient(135deg, var(--color-bg-surface), rgba(0, 255, 204, 0.15));
+      box-shadow: inset var(--shadow-inner-sm), 0 0 15px rgba(0, 255, 204, 0.1);
+    }
+
+    .canvas-item-icon {
+      font-size: 1.2rem;
+      margin-bottom: 0.2rem;
+    }
+
+    .canvas-item-name {
+      font-weight: 600;
+      color: var(--color-accent-green);
+      font-size: 0.9rem;
+    }
+
+    .canvas-item-value {
+      font-family: 'Monaco', monospace;
+      color: var(--color-accent-cyan);
+      font-size: 0.75rem;
+      margin-top: 0.2rem;
+    }
+
+    .canvas-connector {
+      font-size: 1.5rem;
+      color: var(--color-accent-green);
+      animation: pulse 2s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 0.5; }
+      50% { opacity: 1; }
+    }
+
+    .canvas-empty {
+      text-align: center;
+      color: var(--color-text-muted);
+      padding: 2rem;
+    }
+
+    .canvas-empty-icon {
+      font-size: 3rem;
+      margin-bottom: 1rem;
+      opacity: 0.3;
+    }
+
+    /* CONFIG PANEL (RIGHT) */
+    .config-panel {
+      grid-row: 2;
+      grid-column: 3;
+      border-left: 1px solid rgba(0, 255, 204, 0.1);
+      display: flex;
+      flex-direction: column;
+    }
+
+    .config-item {
+      padding: 1rem;
+      border-bottom: 1px solid rgba(0, 255, 204, 0.1);
+    }
+
+    .config-item h4 {
+      margin: 0 0 0.6rem;
+      color: var(--color-accent-green);
+      font-size: 0.9rem;
+      text-transform: uppercase;
+    }
+
+    .config-value {
+      background-color: var(--color-bg-primary);
+      padding: 0.6rem;
+      border-radius: var(--radius-sm);
+      border: 1px solid rgba(0, 255, 204, 0.1);
+      color: var(--color-text-secondary);
+      font-size: 0.85rem;
+      font-family: 'Monaco', monospace;
+      word-break: break-all;
+    }
+
+    .config-input {
+      width: 100%;
+      padding: 0.6rem;
+      background-color: var(--color-bg-primary);
+      border: 1px solid rgba(0, 255, 204, 0.2);
+      border-radius: var(--radius-sm);
+      color: var(--color-text-primary);
+      font-size: 0.9rem;
+      box-sizing: border-box;
+    }
+
+    .config-select {
+      width: 100%;
+      padding: 0.6rem;
+      background-color: var(--color-bg-primary);
+      border: 1px solid rgba(0, 255, 204, 0.2);
+      border-radius: var(--radius-sm);
+      color: var(--color-text-primary);
+      font-size: 0.9rem;
+      box-sizing: border-box;
+    }
+
+    /* MONITOR PANEL (BOTTOM) */
+    .monitor-panel {
+      grid-row: 3;
+      grid-column: 1 / -1;
+      border-top: 1px solid rgba(0, 255, 204, 0.1);
+      display: flex;
+      flex-direction: column;
+    }
+
+    .monitor-header {
+      padding: 1rem 2rem;
+      border-bottom: 1px solid rgba(0, 255, 204, 0.1);
+      display: flex;
+      align-items: center;
+    }
+
+    .monitor-title {
+      font-weight: 600;
+      color: var(--color-accent-green);
+    }
+
+    .monitor-content {
+      flex: 1;
+      overflow-y: auto;
+      padding: 1rem 2rem;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 1rem;
+    }
+
+    .monitor-item {
+      background-color: var(--color-bg-surface);
+      border: 1px solid rgba(0, 255, 204, 0.1);
+      border-radius: var(--radius-md);
+      padding: 1rem;
+      font-size: 0.85rem;
+    }
+
+    .monitor-item-header {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 0.6rem;
+      font-weight: 600;
+      color: var(--color-accent-green);
+    }
+
+    .monitor-item-status {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      margin-bottom: 0.4rem;
+    }
+
+    .status-indicator {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      animation: pulse 2s infinite;
+    }
+
+    .status-indicator.active {
+      background-color: var(--color-accent-green);
+      box-shadow: 0 0 8px rgba(0, 255, 204, 0.6);
+    }
+
+    .status-indicator.warning {
+      background-color: var(--color-accent-yellow);
+      box-shadow: 0 0 8px rgba(255, 170, 0, 0.6);
+    }
+
+    .status-indicator.error {
+      background-color: var(--color-accent-red);
+      box-shadow: 0 0 8px rgba(255, 60, 60, 0.6);
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+
+    .monitor-item-value {
+      background-color: var(--color-bg-primary);
+      padding: 0.4rem 0.6rem;
+      border-radius: var(--radius-sm);
+      font-family: 'Monaco', monospace;
+      color: var(--color-accent-cyan);
+    }
+
+    .monitor-item-time {
+      font-size: 0.75rem;
+      color: var(--color-text-muted);
+      margin-top: 0.4rem;
+    }
+
+    /* Responsive */
+    @media (max-width: 1300px) {
+      .mapping-container {
+        grid-template-columns: 240px 1fr 280px;
+      }
+    }
+
+    @media (max-width: 1024px) {
+      .mapping-container {
+        grid-template-columns: 1fr;
+        grid-template-rows: 70px 1fr 180px;
+      }
+
+      .sources-panel, .config-panel {
+        display: none;
+      }
+
+      .mapping-canvas {
+        grid-column: 1;
+      }
+
+      .monitor-panel {
+        grid-column: 1;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="mapping-container">
+    <!-- HEADER -->
+    <div class="mapping-header">
+      <div class="header-title">
+        <h1>🔗 IIoT Data Mapping Engine</h1>
+        <span style="color: var(--color-text-muted); font-size: 0.9rem">v1.0</span>
+      </div>
+      <div class="header-controls">
+        <button class="header-btn" onclick="validateMappings()">✓ Validate</button>
+        <button class="header-btn" onclick="saveMappings()">💾 Save</button>
+        <button class="header-btn primary" onclick="deployMappings()">▶ Deploy</button>
+      </div>
+    </div>
+
+    <!-- SOURCES PANEL (LEFT) -->
+    <div class="sources-panel">
+      <div class="panel-header">
+        <h3>📡 Devices & Tags</h3>
+      </div>
+      <div class="panel-search">
+        <input type="text" placeholder="Search devices...">
+      </div>
+      <div class="panel-content">
+        <!-- PLC Device -->
+        <div class="device-item" draggable="true">
+          <div class="device-type">🏭 PLC</div>
+          <div class="device-name">plc_1</div>
+          <div class="device-info">
+            Protocol: <strong>Modbus RTU</strong><br/>
+            Port: /dev/ttyUSB0<br/>
+            Baudrate: 9600
+          </div>
+          <div class="tag-list">
+            <div class="tag-item">temperature [40001]</div>
+            <div class="tag-item">motor_status [00001]</div>
+          </div>
+        </div>
+
+        <!-- OPC UA Device -->
+        <div class="device-item" draggable="true">
+          <div class="device-type">🔌 OPC UA</div>
+          <div class="device-name">opcua_1</div>
+          <div class="device-info">
+            Endpoint: opc.tcp://localhost:4840<br/>
+            Status: Connected
+          </div>
+          <div class="tag-list">
+            <div class="tag-item">node_temperature [float]</div>
+          </div>
+        </div>
+
+        <!-- MQTT Broker -->
+        <div class="device-item" draggable="true">
+          <div class="device-type">📨 MQTT</div>
+          <div class="device-name">mqtt_1</div>
+          <div class="device-info">
+            Broker: mqtt://localhost<br/>
+            Topics: 3
+          </div>
+          <div class="tag-list">
+            <div class="tag-item">sensor/temp [float]</div>
+          </div>
+        </div>
+
+        <!-- HTTP API -->
+        <div class="device-item" draggable="true">
+          <div class="device-type">🌐 HTTP</div>
+          <div class="device-name">http_1</div>
+          <div class="device-info">
+            Base URL: http://api.local<br/>
+            Endpoints: 2
+          </div>
+          <div class="tag-list">
+            <div class="tag-item">GET /temp [float]</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- MAPPING CANVAS (CENTER) -->
+    <div class="mapping-canvas">
+      <div class="canvas-header">
+        <div class="canvas-title">📊 Data Flow Visualization</div>
+        <div class="canvas-stats">
+          <div class="canvas-stat">
+            <span>Mappings:</span>
+            <span class="canvas-stat-value" id="canvas-stat-mappings">0</span>
+          </div>
+          <div class="canvas-stat">
+            <span>Sources:</span>
+            <span class="canvas-stat-value" id="canvas-stat-sources">4</span>
+          </div>
+          <div class="canvas-stat">
+            <span>Targets:</span>
+            <span class="canvas-stat-value" id="canvas-stat-targets">5</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="canvas-content">
+        <div class="canvas-svg-wrapper">
+          <svg id="canvas-flow-svg"></svg>
+          <div class="canvas-flow" id="canvas-flow-container">
+            <!-- Data Sources Section -->
+            <div class="canvas-section">
+              <div class="canvas-section-title">📥 Sources</div>
+              <div class="canvas-items" id="canvas-sources">
+                <div class="canvas-item">
+                  <div class="canvas-item-icon">🔌</div>
+                  <div class="canvas-item-name">Waiting...</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Middle Connector -->
+            <div class="canvas-connector">⟷</div>
+
+            <!-- Mappings Section -->
+            <div class="canvas-section">
+              <div class="canvas-section-title">🔗 Mappings</div>
+              <div class="canvas-items" id="canvas-mappings">
+                <div class="canvas-item" style="opacity: 0.5;">
+                  <div class="canvas-item-icon">∅</div>
+                  <div class="canvas-item-name">Empty</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Final Connector -->
+            <div class="canvas-connector">⟶</div>
+
+            <!-- Internal Variables Section -->
+            <div class="canvas-section">
+              <div class="canvas-section-title">📤 Targets</div>
+              <div class="canvas-items" id="canvas-targets">
+                <div class="canvas-item">
+                  <div class="canvas-item-icon">⚙️</div>
+                  <div class="canvas-item-name">Waiting...</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="canvas-empty" id="canvas-empty-state" style="display: none;">
+          <div class="canvas-empty-icon">📍</div>
+          <p>No mappings yet. Add mappings from the Config panel to visualize data flow.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- CONFIG PANEL (RIGHT) -->
+    <div class="config-panel">
+      <div class="panel-header">
+        <h3>⚙️ Map Config</h3>
+      </div>
+      <div class="panel-content">
+        <div class="config-item">
+          <h4>Value Name</h4>
+          <input type="text" id="mapping-value-name" class="config-input" placeholder="e.g., room_temp">
+        </div>
+
+        <div class="config-item">
+          <h4>Data Source</h4>
+          <select id="data-source" class="config-select">
+            <option value="">-- Select Data Source --</option>
+          </select>
+        </div>
+
+        <div class="config-item">
+          <h4>Internal Variable</h4>
+          <select id="internal-var" class="config-select">
+            <option value="">-- Select Internal Variable --</option>
+          </select>
+        </div>
+
+        <div class="config-item">
+          <h4>UI Type</h4>
+          <select id="ui-type" class="config-select">
+            <option value="display">Display</option>
+            <option value="input">Input</option>
+            <option value="toggle">Toggle</option>
+            <option value="button">Button</option>
+          </select>
+        </div>
+
+        <div class="config-item">
+          <button id="add-mapping-btn" class="btn btn-primary" style="width: 100%; margin-top: 1rem">+ Add Mapping</button>
+        </div>
+
+        <!-- Mapping Rules Table -->
+        <div style="margin-top: 2rem; overflow-x: auto;">
+          <h4 style="font-size: 0.9rem; margin-bottom: 1rem;">Mapping Rules</h4>
+          <table style="width: 100%; font-size: 0.85rem; border-collapse: collapse;">
+            <thead>
+              <tr style="border-bottom: 1px solid rgba(0,255,204,0.2);">
+                <th style="text-align: left; padding: 0.5rem; color: var(--color-accent-green);">ID</th>
+                <th style="text-align: left; padding: 0.5rem; color: var(--color-accent-green);">Value</th>
+                <th style="text-align: left; padding: 0.5rem; color: var(--color-accent-green);">Source</th>
+                <th style="text-align: left; padding: 0.5rem; color: var(--color-accent-green);">Var</th>
+                <th style="text-align: left; padding: 0.5rem; color: var(--color-accent-green);">Status</th>
+                <th style="text-align: center; padding: 0.5rem; color: var(--color-accent-green);">Act</th>
+              </tr>
+            </thead>
+            <tbody id="mapping-table-body">
+              <tr>
+                <td colspan="6" style="text-align: center; color: var(--color-text-muted); padding: 1rem;">Loading...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- MONITOR PANEL (BOTTOM) -->
+    <div class="monitor-panel">
+      <div class="monitor-header">
+        <div class="monitor-title">📊 Real-time Monitor</div>
+      </div>
+      <div class="monitor-content" id="generated-monitor-ui">
+        <p style="color: var(--color-text-muted); text-align: center; padding: 2rem;">Add mappings to see generated UI</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- SCRIPTS -->
+  <script src="scripts.js"></script>
+  <script>
+    // Legacy function stubs to prevent errors
+    function validateMappings() {
+      showNotification('success', 'Validation Complete', '✓ All mappings validated successfully');
+    }
+
+    function saveMappings() {
+      showNotification('success', 'Saved', '✓ Mapping configuration saved');
+    }
+
+    function deployMappings() {
+      showNotification('info', 'Deploy', 'ℹ Deploying mapping configuration...');
+      setTimeout(() => {
+        showNotification('success', 'Deployed', '✓ Data mappings deployed to edge gateway');
+      }, 1500);
+    }
+
+    /* ============================================================================
+       CANVAS VISUALIZATION SYSTEM
+       ========================================================================== */
+
+    // Update canvas with mapping visualization
+    function updateCanvasVisualization() {
+      updateCanvasStats();
+      renderCanvasSources();
+      renderCanvasMappings();
+      renderCanvasTargets();
+      drawCanvasConnections();
+      updateCanvasEmptyState();
+    }
+
+    // Update canvas statistics
+    function updateCanvasStats() {
+      const mappings = MappingDemo.mapping_rules.length;
+      const sources = MappingDemo.sources.length;
+      const targets = MappingDemo.internal_vars.length;
+      
+      document.getElementById('canvas-stat-mappings').textContent = mappings;
+      document.getElementById('canvas-stat-sources').textContent = sources;
+      document.getElementById('canvas-stat-targets').textContent = targets;
+    }
+
+    // Render active sources
+    function renderCanvasSources() {
+      const container = document.getElementById('canvas-sources');
+      container.innerHTML = '';
+      
+      // Get unique sources from mappings
+      const usedSources = new Map();
+      MappingDemo.mapping_rules.forEach(rule => {
+        const sourceName = rule.data_source.split('.')[0];
+        usedSources.set(sourceName, sourceName);
+      });
+      
+      if (usedSources.size === 0 && MappingDemo.mapping_rules.length === 0) {
+        MappingDemo.sources.slice(0, 2).forEach(source => {
+          const item = createCanvasItem(`🔌 ${source.type}`, source.name, source.status);
+          container.appendChild(item);
+        });
+      } else {
+        usedSources.forEach((name, key) => {
+          const source = MappingDemo.sources.find(s => s.name === name);
+          if (source) {
+            const item = createCanvasItem(`🔌 ${source.type}`, source.name, source.status);
+            container.appendChild(item);
+          }
+        });
+      }
+    }
+
+    // Render active mappings
+    function renderCanvasMappings() {
+      const container = document.getElementById('canvas-mappings');
+      container.innerHTML = '';
+      
+      if (MappingDemo.mapping_rules.length === 0) {
+        const empty = document.createElement('div');
+        empty.className = 'canvas-item';
+        empty.style.opacity = '0.5';
+        empty.innerHTML = `
+          <div class="canvas-item-icon">∅</div>
+          <div class="canvas-item-name">No mappings</div>
+        `;
+        container.appendChild(empty);
+        return;
+      }
+      
+      MappingDemo.mapping_rules.forEach(rule => {
+        const item = createCanvasItem(`🔗 Map`, rule.internal_var, rule.status);
+        container.appendChild(item);
+      });
+    }
+
+    // Render active targets (internal variables)
+    function renderCanvasTargets() {
+      const container = document.getElementById('canvas-targets');
+      container.innerHTML = '';
+      
+      // Get unique targets from mappings
+      const usedTargets = new Set();
+      MappingDemo.mapping_rules.forEach(rule => {
+        usedTargets.add(rule.internal_var);
+      });
+      
+      if (usedTargets.size === 0 && MappingDemo.mapping_rules.length === 0) {
+        MappingDemo.internal_vars.slice(0, 2).forEach(variable => {
+          const item = createCanvasItem(`⚙️ ${variable.type}`, variable.name, 'ready');
+          container.appendChild(item);
+        });
+      } else {
+        usedTargets.forEach(targetName => {
+          const target = MappingDemo.internal_vars.find(v => v.name === targetName);
+          if (target) {
+            const item = createCanvasItem(`⚙️ ${target.type}`, target.name, 'active');
+            container.appendChild(item);
+          }
+        });
+      }
+    }
+
+    // Create canvas item element
+    function createCanvasItem(icon, name, status) {
+      const item = document.createElement('div');
+      item.className = 'canvas-item';
+      
+      let statusColor = 'var(--color-accent-green)';
+      if (status === 'error') statusColor = 'var(--color-accent-red)';
+      else if (status === 'warning') statusColor = 'var(--color-accent-yellow)';
+      else if (status === 'syncing') statusColor = 'var(--color-accent-blue)';
+      
+      item.innerHTML = `
+        <div class="canvas-item-icon">${icon}</div>
+        <div class="canvas-item-name">${name}</div>
+        <div class="canvas-item-value" style="color: ${statusColor}; font-size: 0.7rem; margin-top: 0.3rem;">
+          ${status.toUpperCase()}
+        </div>
+      `;
+      
+      return item;
+    }
+
+    // Draw connection lines (SVG)
+    function drawCanvasConnections() {
+      const svg = document.getElementById('canvas-flow-svg');
+      if (!svg) return;
+      
+      // Clear previous lines
+      svg.innerHTML = '';
+      
+      // Get container dimensions
+      const container = document.getElementById('canvas-flow-container');
+      if (!container) return;
+      
+      const width = container.offsetWidth;
+      const height = container.offsetHeight;
+      
+      svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
+      svg.setAttribute('width', width);
+      svg.setAttribute('height', height);
+      
+      if (MappingDemo.mapping_rules.length === 0) return;
+      
+      // Create gradient for glow effect
+      const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+      const gradient = document.createElementNS('http://www.w3.org/2000/svg', 'linearGradient');
+      gradient.setAttribute('id', 'flowGradient');
+      gradient.setAttribute('x1', '0%');
+      gradient.setAttribute('y1', '0%');
+      gradient.setAttribute('x2', '100%');
+      gradient.setAttribute('y2', '0%');
+      
+      const stop1 = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
+      stop1.setAttribute('offset', '0%');
+      stop1.setAttribute('stop-color', 'rgba(0, 255, 150, 0.2)');
+      
+      const stop2 = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
+      stop2.setAttribute('offset', '50%');
+      stop2.setAttribute('stop-color', 'rgba(0, 255, 150, 0.8)');
+      
+      const stop3 = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
+      stop3.setAttribute('offset', '100%');
+      stop3.setAttribute('stop-color', 'rgba(0, 255, 150, 0.2)');
+      
+      gradient.appendChild(stop1);
+      gradient.appendChild(stop2);
+      gradient.appendChild(stop3);
+      defs.appendChild(gradient);
+      svg.appendChild(defs);
+      
+      // Draw lines
+      MappingDemo.mapping_rules.forEach((rule, index) => {
+        // Left line (source to mapping)
+        const line1 = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        line1.setAttribute('x1', '20%');
+        line1.setAttribute('y1', '50%');
+        line1.setAttribute('x2', '38%');
+        line1.setAttribute('y2', '50%');
+        line1.setAttribute('stroke', 'url(#flowGradient)');
+        line1.setAttribute('stroke-width', '2');
+        line1.setAttribute('stroke-linecap', 'round');
+        line1.style.animation = `flow 2s linear infinite`;
+        line1.style.animationDelay = `${index * 0.1}s`;
+        svg.appendChild(line1);
+        
+        // Right line (mapping to target)
+        const line2 = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        line2.setAttribute('x1', '62%');
+        line2.setAttribute('y1', '50%');
+        line2.setAttribute('x2', '80%');
+        line2.setAttribute('y2', '50%');
+        line2.setAttribute('stroke', 'url(#flowGradient)');
+        line2.setAttribute('stroke-width', '2');
+        line2.setAttribute('stroke-linecap', 'round');
+        line2.style.animation = `flow 2s linear infinite`;
+        line2.style.animationDelay = `${index * 0.1 + 0.1}s`;
+        svg.appendChild(line2);
+      });
+    }
+
+    // Add animation for flow lines
+    const style = document.createElement('style');
+    style.textContent = `
+      @keyframes flow {
+        0% { stroke-dashoffset: 0; opacity: 0.3; }
+        50% { opacity: 1; }
+        100% { stroke-dashoffset: 20px; opacity: 0.3; }
+      }
+      #canvas-flow-svg line {
+        stroke-dasharray: 5, 5;
+      }
+    `;
+    document.head.appendChild(style);
+
+    // Hook into mapping functions to update canvas
+    const originalGenerateMonitorUI = window.generateMonitorUI;
+    window.generateMonitorUI = function() {
+      originalGenerateMonitorUI();
+      updateCanvasVisualization();
+    };
+
+    const originalAddMapping = window.addMapping;
+    window.addMapping = function(...args) {
+      const result = originalAddMapping(...args);
+      updateCanvasVisualization();
+      return result;
+    };
+
+    const originalRemoveMapping = window.removeMapping;
+    window.removeMapping = function(...args) {
+      const result = originalRemoveMapping(...args);
+      updateCanvasVisualization();
+      return result;
+    };
+
+    // Update canvas empty state
+    function updateCanvasEmptyState() {
+      const emptyState = document.getElementById('canvas-empty-state');
+      const flowContainer = document.getElementById('canvas-flow-container');
+      
+      if (MappingDemo.mapping_rules.length === 0) {
+        flowContainer.style.display = 'none';
+        emptyState.style.display = 'block';
+      } else {
+        flowContainer.style.display = 'flex';
+        emptyState.style.display = 'none';
+      }
+    }
+
+    console.log('%c🔗 IIoT Data Mapping Engine v2.1 - Canvas Visualization Ready', 'color: #00ffcc; font-size: 14px; font-weight: bold');
+  </script>
+</body>
+</html>
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="components.css" />
+  <style>
+    body {
+      background-color: var(--color-bg-primary);
+      color: var(--color-text-primary);
+    }
+
+    .main-container {
+      display: grid;
+      grid-template-columns: 250px 1fr;
+      gap: 0;
+      min-height: 100vh;
+    }
+
+    /* SIDEBAR */
+    .sidebar {
+      background-color: var(--color-bg-surface);
+      box-shadow: var(--shadow-outer-md);
+      padding: 1.5rem 0;
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      overflow-y: auto;
+    }
+
+    .logo {
+      padding: 0 1.5rem;
+      margin-bottom: 2rem;
+      border-bottom: 2px solid rgba(0, 255, 204, 0.2);
+      padding-bottom: 1rem;
+    }
+
+    .logo h2 {
+      color: var(--color-accent-green);
+      font-size: 1.2rem;
+      margin: 0;
+      text-align: center;
+    }
+
+    .nav-menu {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+
+    .nav-menu li {
+      margin: 0.5rem 0;
+    }
+
+    .nav-link {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0.75rem 1.5rem;
+      color: var(--color-text-secondary);
+      text-decoration: none;
+      transition: all 0.2s;
+      border-left: 3px solid transparent;
+      cursor: pointer;
+      font-weight: 500;
+    }
+
+    .nav-link:hover,
+    .nav-link.active {
+      color: var(--color-accent-green);
+      background-color: var(--color-bg-highlight);
+      border-left-color: var(--color-accent-green);
+      box-shadow: inset var(--shadow-inner-sm);
+    }
+
+    .nav-icon {
+      font-size: 1.2rem;
+      width: 24px;
+      display: inline-flex;
+      justify-content: center;
+    }
+
+    /* TOP BAR */
+    .top-bar {
+      background-color: var(--color-bg-surface);
+      padding: 1rem 2rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      box-shadow: var(--shadow-outer-md);
+      border-bottom: 2px solid rgba(0, 255, 204, 0.2);
+    }
+
+    .top-bar-title {
+      font-size: 1.5rem;
+      color: var(--color-accent-green);
+      margin: 0;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .top-bar-controls {
+      display: flex;
+      gap: 1rem;
+      align-items: center;
+    }
+
+    .control-btn {
+      padding: 0.5rem 1rem;
+      background-color: var(--color-bg-highlight);
+      border: 1px solid rgba(0, 255, 204, 0.3);
+      border-radius: var(--radius-sm);
+      color: var(--color-text-secondary);
+      cursor: pointer;
+      transition: all 0.2s;
+      font-weight: 600;
+    }
+
+    .control-btn:hover {
+      color: var(--color-accent-green);
+      border-color: var(--color-accent-green);
+      box-shadow: var(--glow-soft);
+    }
+
+    /* CONTENT AREA */
+    .content-area {
+      display: flex;
+      flex-direction: column;
+      overflow-y: auto;
+    }
+
+    .page-content {
+      padding: 2rem;
+    }
+
+    /* MAPPING WORKFLOW */
+    .mapping-workflow {
+      background-color: var(--color-bg-surface);
+      padding: 2rem;
+      border-radius: var(--radius-md);
+      box-shadow: var(--shadow-outer-md);
+      margin-bottom: 2rem;
+    }
+
+    .workflow-title {
+      font-size: 1.3rem;
+      color: var(--color-accent-green);
+      margin-bottom: 1.5rem;
+      padding-bottom: 1rem;
+      border-bottom: 2px solid rgba(0, 255, 204, 0.2);
+    }
+
+    .workflow-steps {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 1.5rem;
+      margin-bottom: 2rem;
+    }
+
+    .workflow-step {
+      background-color: var(--color-bg-primary);
+      padding: 1.5rem;
+      border-radius: var(--radius-md);
+      border-left: 4px solid var(--color-accent-green);
+      box-shadow: inset var(--shadow-inner-sm);
+      transition: all 0.3s;
+    }
+
+    .workflow-step:hover {
+      box-shadow: inset var(--shadow-inner-sm), 0 0 12px rgba(0, 255, 204, 0.2);
+      border-left-color: var(--color-accent-yellow);
+    }
+
+    .step-number {
+      font-size: 2rem;
+      color: var(--color-accent-green);
+      font-weight: bold;
+      margin-bottom: 0.5rem;
+    }
+
+    .step-title {
+      font-size: 1.1rem;
+      color: var(--color-text-secondary);
+      margin-bottom: 0.75rem;
+      font-weight: 600;
+    }
+
+    .step-description {
+      color: var(--color-text-muted);
+      font-size: 0.9rem;
+      line-height: 1.5;
+      margin-bottom: 1rem;
+    }
+
+    /* FORM ELEMENTS */
+    .form-group {
+      margin-bottom: 1.5rem;
+    }
+
+    .form-label {
+      display: block;
+      color: var(--color-text-secondary);
+      font-size: 0.9rem;
+      font-weight: 600;
+      margin-bottom: 0.5rem;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .form-input,
+    .form-select {
+      width: 100%;
+      padding: 0.75rem;
+      background-color: var(--color-bg-primary);
+      border: 1px solid rgba(0, 255, 204, 0.3);
+      border-radius: var(--radius-sm);
+      color: var(--color-text-primary);
+      font-size: 0.95rem;
+      transition: all 0.2s;
+      box-shadow: inset var(--shadow-inner-sm);
+    }
+
+    .form-input:focus,
+    .form-select:focus {
+      outline: none;
+      border-color: var(--color-accent-green);
+      box-shadow: inset var(--shadow-inner-sm), 0 0 12px rgba(0, 255, 204, 0.3);
+    }
+
+    /* MAPPING TABLE */
+    .mapping-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 1.5rem;
+    }
+
+    .mapping-table thead {
+      background-color: var(--color-bg-highlight);
+    }
+
+    .mapping-table th {
+      padding: 1rem;
+      text-align: left;
+      color: var(--color-accent-green);
+      font-weight: 600;
+      border-bottom: 2px solid rgba(0, 255, 204, 0.3);
+      font-size: 0.85rem;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .mapping-table td {
+      padding: 1rem;
+      border-bottom: 1px solid rgba(0, 255, 204, 0.2);
+      color: var(--color-text-secondary);
+    }
+
+    .mapping-table tbody tr:hover {
+      background-color: var(--color-bg-highlight);
+    }
+
+    .status-badge {
+      display: inline-block;
+      padding: 0.4rem 0.8rem;
+      border-radius: var(--radius-sm);
+      font-size: 0.8rem;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+
+    .status-badge.active {
+      background-color: rgba(0, 255, 204, 0.2);
+      color: var(--color-accent-green);
+    }
+
+    .status-badge.inactive {
+      background-color: rgba(255, 170, 0, 0.2);
+      color: var(--color-accent-yellow);
+    }
+
+    /* ACTION BUTTONS */
+    .button-group {
+      display: flex;
+      gap: 1rem;
+      flex-wrap: wrap;
+      margin-top: 1.5rem;
+    }
+
+    .action-btn {
+      padding: 0.75rem 1.5rem;
+      background-color: var(--color-bg-highlight);
+      border: 2px solid var(--color-accent-green);
+      border-radius: var(--radius-md);
+      color: var(--color-accent-green);
+      cursor: pointer;
+      font-weight: 600;
+      transition: all 0.3s;
+      box-shadow: var(--shadow-outer-sm);
+    }
+
+    .action-btn:hover {
+      background-color: var(--color-accent-green);
+      color: var(--color-bg-primary);
+      box-shadow: var(--glow-strong);
+      transform: scale(1.05);
+    }
+
+    .action-btn.secondary {
+      border-color: var(--color-text-secondary);
+      color: var(--color-text-secondary);
+    }
+
+    .action-btn.secondary:hover {
+      background-color: var(--color-text-secondary);
+      color: var(--color-bg-primary);
+    }
+
+    .action-btn.danger {
+      border-color: var(--color-accent-red);
+      color: var(--color-accent-red);
+    }
+
+    .action-btn.danger:hover {
+      background-color: var(--color-accent-red);
+      color: white;
+    }
+
+    /* INFO BOX */
+    .info-box {
+      background-color: var(--color-bg-primary);
+      padding: 1.5rem;
+      border-radius: var(--radius-md);
+      border-left: 4px solid var(--color-accent-blue);
+      margin-bottom: 2rem;
+      box-shadow: inset var(--shadow-inner-sm);
+    }
+
+    .info-box h4 {
+      color: var(--color-accent-blue);
+      margin-top: 0;
+    }
+
+    .info-box p {
+      color: var(--color-text-muted);
+      margin: 0.5rem 0;
+      font-size: 0.9rem;
+      line-height: 1.6;
+    }
+
+    /* RESPONSIVE */
+    @media (max-width: 1024px) {
+      .main-container {
+        grid-template-columns: 1fr;
+      }
+
+      .sidebar {
+        position: fixed;
+        left: 0;
+        top: 0;
+        height: auto;
+        width: 100%;
+        z-index: 1000;
+      }
+
+      .logo {
+        display: none;
+      }
+
+      .nav-menu {
+        display: flex;
+        gap: 0;
+        overflow-x: auto;
+      }
+
+      .nav-menu li {
+        margin: 0;
+      }
+
+      .content-area {
+        margin-top: 60px;
+      }
+    }
+
+    @media (max-width: 768px) {
+      .page-content {
+        padding: 1rem;
+      }
+
+      .mapping-workflow {
+        padding: 1.5rem;
+      }
+
+      .workflow-steps {
+        grid-template-columns: 1fr;
+      }
+
+      .top-bar {
+        padding: 1rem;
+        flex-direction: column;
+        gap: 1rem;
+      }
+
+      .button-group {
+        flex-direction: column;
+      }
+
+      .action-btn {
+        width: 100%;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="main-container">
+    <!-- SIDEBAR -->
+    <aside class="sidebar">
+      <div class="logo">
+        <h2>⚙️ Dashboard</h2>
+      </div>
+      <nav>
+        <ul class="nav-menu">
+          <li><a href="index.html" class="nav-link"><span class="nav-icon">🏠</span> Home</a></li>
+          <li><a href="monitor.html" class="nav-link"><span class="nav-icon">📊</span> Monitor</a></li>
+          <li><a href="config.html" class="nav-link"><span class="nav-icon">⚙️</span> Config</a></li>
+          <li><a href="mapping.html" class="nav-link active"><span class="nav-icon">🔗</span> Mapping</a></li>
+          <li style="margin-top: 2rem; border-top: 1px solid rgba(0, 255, 204, 0.2); padding-top: 1rem">
+            <a href="#" class="nav-link" onclick="toggleTheme(); return false;"><span class="nav-icon" id="theme-icon">🌙</span> <span id="theme-label">Dark Mode</span></a>
+          </li>
+        </ul>
+      </nav>
+    </aside>
+
+    <!-- MAIN CONTENT -->
+    <div class="content-area">
+      <!-- TOP BAR -->
+      <div class="top-bar">
+        <h1 class="top-bar-title">🔗 Data Source Mapping</h1>
+        <div class="top-bar-controls">
+          <button class="control-btn" onclick="saveMapping()">💾 Save Mapping</button>
+        </div>
+      </div>
+
+      <!-- PAGE CONTENT -->
+      <div class="page-content">
+        <!-- INFO BOX -->
+        <div class="info-box">
+          <h4>📖 How Data Mapping Works</h4>
+          <p>
+            <strong>Step 1:</strong> Define a value name (e.g., "Temperature", "Pressure")
+          </p>
+          <p>
+            <strong>Step 2:</strong> Select data source (PLC via Modbus, OPC UA server, MQTT topic)
+          </p>
+          <p>
+            <strong>Step 3:</strong> Choose internal variable name for internal processing
+          </p>
+          <p>
+            <strong>Step 4:</strong> Select UI type to automatically generate monitor card or input field
+          </p>
+          <p style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid rgba(0, 255, 204, 0.2)">
+            Result: A new row appears in the Monitor dashboard with real-time data display!
+          </p>
+        </div>
+
+        <!-- WORKFLOW STEPS -->
+        <div class="mapping-workflow">
+          <h3 class="workflow-title">⚡ Quick Mapping Workflow</h3>
+          
+          <div class="workflow-steps">
+            <div class="workflow-step">
+              <div class="step-number">1️⃣</div>
+              <div class="step-title">Define Value Name</div>
+              <div class="step-description">
+                Enter a descriptive name for the data point (e.g., "Room Temperature", "System Pressure")
+              </div>
+              <input type="text" class="form-input" placeholder="e.g., Temperature, Humidity, CPU Usage" />
+            </div>
+
+            <div class="workflow-step">
+              <div class="step-number">2️⃣</div>
+              <div class="step-title">Select Data Source</div>
+              <div class="step-description">
+                Choose where data comes from: PLC, OPC UA, or MQTT
+              </div>
+              <select class="form-select">
+                <option value="">-- Select Source --</option>
+                <option value="plc">📡 Modbus RTU/TCP (PLC)</option>
+                <option value="opcua">🔗 OPC UA</option>
+                <option value="mqtt">🌐 MQTT</option>
+              </select>
+            </div>
+
+            <div class="workflow-step">
+              <div class="step-number">3️⃣</div>
+              <div class="step-title">Choose Internal Variable</div>
+              <div class="step-description">
+                Map to an internal variable name for processing
+              </div>
+              <select class="form-select">
+                <option value="">-- Select Variable --</option>
+                <option value="internal_temp">$temp (Temperature)</option>
+                <option value="internal_humidity">$humidity (Humidity)</option>
+                <option value="internal_pressure">$pressure (Pressure)</option>
+                <option value="internal_cpu">$cpu_usage (CPU)</option>
+              </select>
+            </div>
+
+            <div class="workflow-step">
+              <div class="step-number">4️⃣</div>
+              <div class="step-title">Select UI Type</div>
+              <div class="step-description">
+                Choose how to display this value in the Monitor page
+              </div>
+              <select class="form-select">
+                <option value="">-- Select UI Type --</option>
+                <option value="card">📦 Monitor Card (Display Only)</option>
+                <option value="input">📝 Input Field (Read/Write)</option>
+                <option value="toggle">🔘 Toggle Button (On/Off)</option>
+                <option value="button">🔗 Action Button</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="button-group">
+            <button class="action-btn" onclick="createMapping()">✨ Create Mapping</button>
+            <button class="action-btn secondary" onclick="previewMapping()">👁️ Preview</button>
+            <button class="action-btn secondary" onclick="generateCode()">💻 Generate Code</button>
+          </div>
+        </div>
+
+        <!-- EXISTING MAPPINGS TABLE -->
+        <div class="mapping-workflow">
+          <h3 class="workflow-title">📋 Active Data Mappings</h3>
+          
+          <table class="mapping-table">
+            <thead>
+              <tr>
+                <th>Display Name</th>
+                <th>Data Source</th>
+                <th>Internal Variable</th>
+                <th>UI Type</th>
+                <th>Address/Topic</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Temperature</td>
+                <td>📡 Modbus RTU</td>
+                <td>$temp</td>
+                <td>Monitor Card</td>
+                <td>Reg: 0x0001</td>
+                <td><span class="status-badge active">Active</span></td>
+                <td>
+                  <button class="control-btn" style="padding: 0.4rem 0.8rem; font-size: 0.85rem;" onclick="editMapping()">Edit</button>
+                </td>
+              </tr>
+              <tr>
+                <td>Humidity</td>
+                <td>📡 Modbus RTU</td>
+                <td>$humidity</td>
+                <td>Monitor Card</td>
+                <td>Reg: 0x0002</td>
+                <td><span class="status-badge active">Active</span></td>
+                <td>
+                  <button class="control-btn" style="padding: 0.4rem 0.8rem; font-size: 0.85rem;" onclick="editMapping()">Edit</button>
+                </td>
+              </tr>
+              <tr>
+                <td>Pressure</td>
+                <td>🔗 OPC UA</td>
+                <td>$pressure</td>
+                <td>Monitor Card</td>
+                <td>ns=2;i=5002</td>
+                <td><span class="status-badge active">Active</span></td>
+                <td>
+                  <button class="control-btn" style="padding: 0.4rem 0.8rem; font-size: 0.85rem;" onclick="editMapping()">Edit</button>
+                </td>
+              </tr>
+              <tr>
+                <td>CPU Usage</td>
+                <td>🌐 MQTT</td>
+                <td>$cpu_usage</td>
+                <td>Input Field</td>
+                <td>sensor/cpu</td>
+                <td><span class="status-badge inactive">Inactive</span></td>
+                <td>
+                  <button class="control-btn" style="padding: 0.4rem 0.8rem; font-size: 0.85rem;" onclick="editMapping()">Edit</button>
+                </td>
+              </tr>
+              <tr>
+                <td>System Power</td>
+                <td>🌐 MQTT</td>
+                <td>$power_state</td>
+                <td>Toggle Button</td>
+                <td>control/power</td>
+                <td><span class="status-badge active">Active</span></td>
+                <td>
+                  <button class="control-btn" style="padding: 0.4rem 0.8rem; font-size: 0.85rem;" onclick="editMapping()">Edit</button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+
+          <div class="button-group">
+            <button class="action-btn">➕ Add New Mapping</button>
+            <button class="action-btn secondary">📥 Import Mappings</button>
+            <button class="action-btn secondary">📤 Export Mappings</button>
+            <button class="action-btn danger">🗑️ Clear All Mappings</button>
+          </div>
+        </div>
+
+        <!-- GENERATED MONITOR UI PREVIEW -->
+        <div class="mapping-workflow">
+          <h3 class="workflow-title">👁️ Generated Monitor Preview</h3>
+          <p style="color: var(--color-text-muted); margin-bottom: 1.5rem;">
+            Based on active mappings, these cards will appear in the Monitor dashboard:
+          </p>
+
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1.5rem">
+            <!-- Preview cards matching actual mappings -->
+            <div style="background-color: var(--color-bg-primary); padding: 1.5rem; border-radius: var(--radius-md); border-left: 4px solid var(--color-accent-green); box-shadow: inset var(--shadow-inner-sm)">
+              <div style="font-size: 0.85rem; color: var(--color-text-muted); text-transform: uppercase; margin-bottom: 0.75rem">Temperature</div>
+              <div style="font-size: 2.5rem; font-weight: bold; color: var(--color-accent-green); font-family: 'Courier New', monospace">24.5</div>
+              <div style="color: var(--color-text-muted); font-size: 0.9rem">°C</div>
+            </div>
+
+            <div style="background-color: var(--color-bg-primary); padding: 1.5rem; border-radius: var(--radius-md); border-left: 4px solid var(--color-accent-yellow); box-shadow: inset var(--shadow-inner-sm)">
+              <div style="font-size: 0.85rem; color: var(--color-text-muted); text-transform: uppercase; margin-bottom: 0.75rem">Humidity</div>
+              <div style="font-size: 2.5rem; font-weight: bold; color: var(--color-accent-yellow); font-family: 'Courier New', monospace">72</div>
+              <div style="color: var(--color-text-muted); font-size: 0.9rem">%</div>
+            </div>
+
+            <div style="background-color: var(--color-bg-primary); padding: 1.5rem; border-radius: var(--radius-md); border-left: 4px solid var(--color-accent-green); box-shadow: inset var(--shadow-inner-sm)">
+              <div style="font-size: 0.85rem; color: var(--color-text-muted); text-transform: uppercase; margin-bottom: 0.75rem">Pressure</div>
+              <div style="font-size: 2.5rem; font-weight: bold; color: var(--color-accent-green); font-family: 'Courier New', monospace">1013</div>
+              <div style="color: var(--color-text-muted); font-size: 0.9rem">hPa</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="scripts.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      const savedTheme = localStorage.getItem('theme') || 'dark';
+      setTheme(savedTheme);
+    });
+
+    function createMapping() {
+      alert('Creating new mapping...\n\nStep-by-step wizard would start here');
+    }
+
+    function editMapping() {
+      alert('Editing mapping dialog would open here');
+    }
+
+    function previewMapping() {
+      alert('Preview of generated Monitor UI shown above');
+    }
+
+    function generateCode() {
+      alert('Generating mapping code to JSON...');
+    }
+
+    function saveMapping() {
+      alert('Mapping configuration saved!');
+    }
+
+    function toggleTheme() {
+      const current = document.documentElement.getAttribute('data-theme') || 'dark';
+      const newTheme = current === 'dark' ? 'light' : 'dark';
+      setTheme(newTheme);
+    }
+
+    function setTheme(theme) {
+      document.documentElement.setAttribute('data-theme', theme);
+      localStorage.setItem('theme', theme);
+      document.documentElement.style.colorScheme = theme;
+      
+      const icon = document.getElementById('theme-icon');
+      const label = document.getElementById('theme-label');
+      if(theme === 'light') {
+        icon.textContent = '☀️';
+        label.textContent = 'Light Mode';
+      } else {
+        icon.textContent = '🌙';
+        label.textContent = 'Dark Mode';
+      }
+    }
+  </script>
+</body>
+</html>
