@@ -248,6 +248,17 @@ if cmake_too_old; then
 fi
 say "CMake: $(cmake --version | head -1)"
 
+# CMake's Ninja generator must be available before the vcpkg toolchain is
+# loaded. Without this preflight, the manifest install obscures the real error
+# with a later "CMAKE_MAKE_PROGRAM is not set" diagnostic.
+if ! command -v ninja >/dev/null 2>&1; then
+  if [[ "$(id -u)" -eq 0 ]]; then
+    apt-get install -y -qq --no-install-recommends ninja-build >/dev/null
+  fi
+fi
+command -v ninja >/dev/null 2>&1 || die "ninja-build is required for the Release build; install it or add it to PATH"
+export CMAKE_MAKE_PROGRAM="$(command -v ninja)"
+
 # --- 2. compiler ------------------------------------------------------------
 CXX_BIN="${CXX:-g++}"
 command -v "$CXX_BIN" >/dev/null || die "no C++ compiler ($CXX_BIN)"
