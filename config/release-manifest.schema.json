@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:emaster:release-manifest:1",
+  "title": "eMaster firmware artifact manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "product", "version", "platform", "architecture", "build_id", "git_commit", "build_time", "channel", "filename", "sha256", "size_bytes", "actor"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "product": {"const": "eMaster"},
+    "version": {"type": "string", "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(-[0-9A-Za-z-]+(\\.[0-9A-Za-z-]+)*)?(\\+[0-9A-Za-z-]+(\\.[0-9A-Za-z-]+)*)?$"},
+    "platform": {"enum": ["windows", "linux", "macos"]},
+    "architecture": {"enum": ["x86", "x64", "arm64", "armhf"]},
+    "build_id": {"type": "string", "minLength": 1},
+    "git_commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "build_time": {"type": "string", "format": "date-time"},
+    "channel": {"enum": ["dev", "beta", "stable"]},
+    "filename": {"type": "string", "pattern": "^eMaster-[0-9A-Za-z.+-]+\\.(zip|tar\\.gz)$"},
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "size_bytes": {"type": "integer", "minimum": 1},
+    "actor": {"type": "string", "minLength": 1}
+  }
+}

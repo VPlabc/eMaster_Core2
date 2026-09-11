@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>eMaster Gateway - Plugins</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="css/app.css" rel="stylesheet">
+  <script src="js/theme.js"></script>
+  <script src="js/auth.js"></script>
+</head>
+<body>
+  <div id="hsfNav"></div>
+  <main class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+      <div>
+        <h1 class="h3 mb-1">Plugin Manager</h1>
+        <p class="text-muted mb-0">Install, update, test, rollback, enable, disable, or delete gateway plugins.</p>
+      </div>
+      <button class="btn btn-outline-secondary" id="refreshPlugins">Refresh</button>
+    </div>
+
+    <div class="card mb-3">
+      <div class="card-body">
+        <div class="row g-2 align-items-end">
+          <div class="col-md-8">
+            <label class="form-label">Unpacked plugin package directory</label>
+            <input class="form-control" id="pluginSource" placeholder="C:\\packages\\hsf.driver.modbus">
+            <div class="form-text">The directory must contain manifest.json and its plugin binary.</div>
+          </div>
+          <div class="col-auto">
+            <button class="btn btn-primary" id="installPlugin">Install</button>
+          </div>
+          <div class="col-auto">
+            <button class="btn btn-outline-primary" id="updatePlugin">Update</button>
+          </div>
+        </div>
+        <hr>
+        <div class="row g-2 align-items-end">
+          <div class="col-md-5">
+            <label class="form-label">Import manifest.json</label>
+            <input class="form-control form-control-sm" type="file" id="pluginManifest" accept="application/json,.json">
+          </div>
+          <div class="col-md-5">
+            <label class="form-label">Import plugin binary</label>
+            <input class="form-control form-control-sm" type="file" id="pluginBinary">
+          </div>
+          <div class="col-auto"><button class="btn btn-outline-success" id="importPlugin">Import plugin</button></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">Installed plugins</div>
+      <div class="table-responsive">
+        <table class="table table-sm table-striped align-middle mb-0" id="pluginsTable">
+          <thead><tr><th>Plugin</th><th>Version</th><th>State</th><th>Driver</th><th>Configuration (JSON)</th><th>Actions</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <pre class="hsf-tool-output m-3" id="pluginMessage"></pre>
+    </div>
+  </main>
+  <script src="js/layout.js"></script>
+  <script src="js/plugins.js"></script>
+</body>
+</html>

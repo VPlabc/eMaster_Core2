@@ -161,7 +161,7 @@ UNSIGNED_COUNT=0
   FIRST=1
   # Both extensions: Linux/macOS ship .tar.gz, Windows ships .zip, and the
   # installer picks the unpack mode from the suffix.
-  for package in "$DIR"/HSF-Gateway-v"$VERSION"-*.tar.gz "$DIR"/HSF-Gateway-v"$VERSION"-*.zip; do
+  for package in "$DIR"/HSF-Gateway-v"$VERSION"-*.tar.gz "$DIR"/HSF-Gateway-v"$VERSION"-*.zip "$DIR"/eMaster-"$VERSION"-*.tar.gz "$DIR"/eMaster-"$VERSION"-*.zip; do
     [[ -e "$package" ]] || continue
     filename="$(basename "$package")"
 
@@ -169,6 +169,7 @@ UNSIGNED_COUNT=0
     # HSF_PLATFORM as CMake computes it, or a gateway looks itself up in the
     # platforms map and finds nothing.
     platform="${filename#HSF-Gateway-v$VERSION-}"
+    platform="${platform#eMaster-$VERSION-}"
     platform="${platform%.tar.gz}"
     platform="${platform%.zip}"
 
@@ -198,6 +199,10 @@ UNSIGNED_COUNT=0
 } > "$MANIFEST"
 
 echo "[manifest] $MANIFEST"
+if [[ $((SIGNED_COUNT + UNSIGNED_COUNT)) -eq 0 ]]; then
+  echo "No artifacts found for version $VERSION" >&2
+  exit 1
+fi
 echo "[manifest] $SIGNED_COUNT signed, $UNSIGNED_COUNT unsigned"
 if [[ $UNSIGNED_COUNT -gt 0 ]]; then
   echo "[manifest] WARNING: unsigned entries will be REFUSED by any gateway with" >&2

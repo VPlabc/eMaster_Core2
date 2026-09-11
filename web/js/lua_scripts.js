@@ -124,7 +124,7 @@
     check.className = "form-check-input mt-0";
     check.style.flex = "0 0 auto";
     check.checked = selected.has(file.path);
-    check.title = "Select for Run/Stop Selected";
+    check.title = "Select for bulk actions";
     check.addEventListener("click", (event) => event.stopPropagation());
     check.addEventListener("change", () => {
       if (check.checked) {
@@ -180,7 +180,9 @@
     [...node.folders.keys()].sort().forEach((folderName) => {
       const details = document.createElement("details");
       details.className = "hsf-tree-folder";
-      details.open = true;
+      // The tree opens compactly. Operators can expand a branch (or all
+      // branches) only when they need its contents.
+      details.open = false;
 
       const summary = document.createElement("summary");
       summary.textContent = folderName;
@@ -194,6 +196,17 @@
       childNode.path = folderPath;
       renderNode(childNode, children);
       details.appendChild(children);
+
+      const runningCount = countRunningScripts(childNode);
+      if (runningCount) {
+        const status = document.createElement("span");
+        status.className = "hsf-tree-folder-status hsf-badge hsf-badge-ok";
+        status.textContent = runningCount + (runningCount === 1 ? " running" : " running");
+        status.title = "A script in this folder is running";
+        status.hidden = details.open;
+        summary.appendChild(status);
+        details.addEventListener("toggle", () => { status.hidden = details.open; });
+      }
 
       container.appendChild(details);
     });
@@ -215,6 +228,14 @@
     }
     renderNode(buildTree(scripts), listEl);
     setActiveHighlight(currentScriptName);
+  }
+
+  function countRunningScripts(node) {
+    const filesHere = node.files.filter((file) => {
+      const state = scriptStates[file.path] && scriptStates[file.path].state;
+      return state === "RUNNING" || state === "STARTING";
+    }).length;
+    return [...node.folders.values()].reduce((total, child) => total + countRunningScripts(child), filesHere);
   }
 
   function deleteFolder(name) {
@@ -359,6 +380,36 @@
       .catch(() => window.HsfLuaEditor.log("Failed to delete " + name + ".", true));
   }
 
+  function deleteSelectedScripts() {
+    const names = [...selected];
+    if (!names.length) {
+      window.HsfLuaEditor.log("Tick one or more scripts to delete.", true);
+      return;
+    }
+    window.HsfConfirm("Delete " + names.length + " selected Lua script" + (names.length === 1 ? "" : "s") + "? This cannot be undone.", "Delete selected Lua scripts")
+      .then((confirmed) => {
+        if (!confirmed) return null;
+        return names.reduce((chain, name) => chain.then((results) =>
+          fetch(apiPath(name), { method: "DELETE" })
+            .then((response) => response.json())
+            .then((result) => results.concat({ name, ok: result.ok !== false, error: result.error }))
+        ), Promise.resolve([]));
+      })
+      .then((results) => {
+        if (!results) return;
+        const failed = results.filter((result) => !result.ok);
+        names.forEach((name) => selected.delete(name));
+        if (currentScriptName && names.includes(currentScriptName)) setCurrentName(null);
+        window.HsfLuaEditor.log(
+          failed.length ? "Deleted " + (results.length - failed.length) + "; " + failed.length + " could not be deleted." : "Deleted " + results.length + " script(s).",
+          failed.length > 0
+        );
+        updateSelectedCount();
+        refreshList();
+      })
+      .catch(() => window.HsfLuaEditor.log("Bulk delete request failed.", true));
+  }
+
   function createScript() {
     let name = newNameInput.value.trim();
     if (!name) return;
@@ -400,10 +451,17 @@
 
   document.getElementById("btnRunSelected").addEventListener("click", () => runScripts([...selected]));
   document.getElementById("btnStopSelected").addEventListener("click", () => stopScripts([...selected]));
+  document.getElementById("btnDeleteSelected").addEventListener("click", deleteSelectedScripts);
   document.getElementById("btnSelectNone").addEventListener("click", () => {
     selected.clear();
     updateSelectedCount();
     listEl.querySelectorAll("input[type=checkbox]").forEach((cb) => (cb.checked = false));
+  });
+  document.getElementById("btnExpandAll").addEventListener("click", () => {
+    listEl.querySelectorAll("details.hsf-tree-folder").forEach((folder) => { folder.open = true; });
+  });
+  document.getElementById("btnCollapseAll").addEventListener("click", () => {
+    listEl.querySelectorAll("details.hsf-tree-folder").forEach((folder) => { folder.open = false; });
   });
 
   document.getElementById("btnImportLuaScript").addEventListener("click", () => {

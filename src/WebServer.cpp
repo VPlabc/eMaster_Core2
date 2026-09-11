@@ -20,6 +20,7 @@
 #include "hsf/CardCache.h"
 #include "hsf/CardClientManager.h"
 #include "hsf/ConfigManager.h"
+#include "hsf/DynamicConfigManager.h"
 #include "hsf/LogStore.h"
 #include "hsf/LuaRuntimeManager.h"
 #include "hsf/Logger.h"
@@ -35,6 +36,7 @@
 #include "hsf/SqlDatabase.h"
 #include "hsf/SystemMonitor.h"
 #include "hsf/TcpSocket.h"
+#include "hsf/ServiceRegistry.h"
 #include "hsf/security/Permissions.h"
 #include "hsf/security/PasswordHash.h"
 #include "hsf/security/SecurityStore.h"
@@ -269,6 +271,7 @@ std::vector<std::string> ScriptNamesFromRequest(const crow::request& req) {
 struct WebServer::Impl {
   WebConfig config;
   std::string webRoot;
+  ServiceRegistry* services = nullptr;
 
   RestClient* rest = nullptr;
   SerialPort* serial = nullptr;
@@ -908,7 +911,7 @@ struct WebServer::Impl {
 
     // Explicit allowlist -- a new page in web/ is a 404 until it is named
     // here. card_clients.html stays listed as a redirect stub to test_tools.
-    for (const std::string& page : {"index.html", "config.html", "lua_editor.html", "lua_docs.html",
+    for (const std::string& page : {"index.html", "config.html", "dynamic_config.html", "lua_editor.html", "lua_docs.html", "visual_flow.html",
                                      "logs.html", "test_tools.html", "plugins.html", "firmware.html", "config_file.html", "card_clients.html", "login.html",
                                      "security.html"}) {
       std::string route = "/" + page;
@@ -1109,7 +1112,7 @@ struct WebServer::Impl {
         // Led.Show() uses rather than a lookalike.
         bool ok = false;
         if (serial2 && serial2->IsOpen() && ConfigManager::Instance().GetSerial2().port == config.port) {
-          ok = serial2->Write(frame);
+          ok = serial2->WriteLatest(frame);
         } else {
           SerialPort testPort;
           if (!testPort.Open(config)) {
@@ -1642,6 +1645,39 @@ struct WebServer::Impl {
     CROW_ROUTE(app, "/api/lua/runtime")([this] {
       return crow::response(200, BuildLuaRuntimeJson().dump());
     });
+
+    // Generic project-scoped dynamic configuration. Schemas are registered by
+    // Lua projects through config.register_schema(); the web layer never
+    // contains protocol-specific field logic.
+    CROW_ROUTE(app, "/api/lua/projects")([] {
+      json projects = json::array();
+      for (const auto& project : DynamicConfigManager::Instance().Projects()) projects.push_back(project);
+      return crow::response(200, projects.dump());
+    });
+
+    CROW_ROUTE(app, "/api/lua/projects/<string>/config/schema")([](const std::string& project) {
+      json schema = DynamicConfigManager::Instance().Schema(project);
+      if (schema.is_null()) return crow::response(404, json{{"error", "unknown Lua project"}}.dump());
+      return crow::response(200, schema.dump());
+    });
+
+    CROW_ROUTE(app, "/api/lua/projects/<string>/config")
+        .methods("GET"_method, "PUT"_method)([this](const crow::request& req, const std::string& project) {
+          if (req.method == "GET"_method) {
+            json values = DynamicConfigManager::Instance().Values(project, true);
+            if (values.is_null()) return crow::response(404, json{{"error", "unknown Lua project"}}.dump());
+            return crow::response(200, values.dump());
+          }
+          json body;
+          try { body = json::parse(req.body); } catch (const std::exception& e) {
+            return crow::response(400, json{{"success", false}, {"error", e.what()}}.dump());
+          }
+          json errors;
+          if (!DynamicConfigManager::Instance().SetValues(project, body, errors))
+            return crow::response(400, json{{"success", false}, {"errors", errors}}.dump());
+          if (lua) lua->QueueEventAll("OnConfigChanged", project);
+          return crow::response(200, json{{"success", true}, {"message", "Configuration applied"}}.dump());
+        });
 
     // Lua script root directory (request/updateUI.md section 14). GET
     // reports the directory currently in use; POST validates a candidate
@@ -2847,9 +2883,9 @@ struct WebServer::Impl {
     return result;
   }
 
-  // Stops whatever Lua application is running and starts the deployed package
-  // in its place. False (with `error`) when there is nothing deployed or it
-  // will not start -- the caller reports that rather than pretending.
+  // Starts one package, replacing only another version of the same application.
+  // Unrelated Lua applications keep running. False (with `error`) when the
+  // selected package cannot be opened or started.
   bool StartPackageFile(const std::string& file, std::string& error) {
     if (!packages || !lua) {
       error = "packaging unavailable";
@@ -4468,21 +4504,22 @@ void WebServer::Configure(const WebConfig& config, const std::string& webRoot) {
   impl_->webRoot = webRoot;
 }
 
-void WebServer::SetModules(RestClient* rest, SerialPort* serial, SerialPort* serial2, ModbusClient* modbus,
-                            RfidClient* rfid, LuaRuntimeManager* lua, MqClient* mq, ZkController* zk,
-                            UpdateManager* update) {
-  impl_->rest = rest;
-  impl_->serial = serial;
-  impl_->serial2 = serial2;
-  impl_->modbus = modbus;
-  impl_->rfid = rfid;
-  impl_->lua = lua;
-  impl_->mq = mq;
-  impl_->zk = zk;
-  impl_->update = update;
-  if (update) {
+void WebServer::SetServices(ServiceRegistry* services) {
+  impl_->services = services;
+  impl_->rest = services ? services->Get<RestClient>(ServiceNames::kRest) : nullptr;
+  impl_->serial = services ? services->Get<SerialPort>(ServiceNames::kSerial) : nullptr;
+  impl_->serial2 = services ? services->Get<SerialPort>(ServiceNames::kSerial2) : nullptr;
+  impl_->modbus = services ? services->Get<ModbusClient>(ServiceNames::kModbus) : nullptr;
+  impl_->rfid = services ? services->Get<RfidClient>(ServiceNames::kRfid) : nullptr;
+  impl_->lua = services ? services->Get<LuaRuntimeManager>(ServiceNames::kLua) : nullptr;
+  impl_->mq = services ? services->Get<MqClient>(ServiceNames::kMq) : nullptr;
+  impl_->zk = services ? services->Get<ZkController>(ServiceNames::kZk) : nullptr;
+  impl_->update = services ? services->Get<UpdateManager>(ServiceNames::kUpdate) : nullptr;
+  impl_->packages = services ? services->Get<PackageManager>(ServiceNames::kPackages) : nullptr;
+  impl_->plugins = services ? services->Get<PluginManager>(ServiceNames::kPlugins) : nullptr;
+  if (impl_->update) {
     Impl* impl = impl_.get();
-    update->SetStateCallback([impl](const nlohmann::json& frame) {
+    impl_->update->SetStateCallback([impl](const nlohmann::json& frame) {
       std::lock_guard<std::mutex> lock(impl->updateFrameMutex);
       impl->pendingUpdateFrame = frame;
       impl->haveUpdateFrame = true;
@@ -4490,10 +4527,6 @@ void WebServer::SetModules(RestClient* rest, SerialPort* serial, SerialPort* ser
   }
   impl_->AttachZkListeners();
 }
-
-void WebServer::SetPackageManager(PackageManager* packages) { impl_->packages = packages; }
-
-void WebServer::SetPluginManager(PluginManager* plugins) { impl_->plugins = plugins; }
 
 void WebServer::Start() {
   if (impl_->running.load()) return;

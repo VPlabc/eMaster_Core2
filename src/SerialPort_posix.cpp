@@ -136,8 +136,17 @@ int SerialPort::PlatformRead(char* buffer, size_t bufferSize) {
 
 bool SerialPort::PlatformWrite(const std::string& text) {
   if (fd_ < 0) return false;
-  ssize_t written = ::write(fd_, text.data(), text.size());
-  return written == static_cast<ssize_t>(text.size());
+  size_t offset = 0;
+  while (offset < text.size()) {
+    ssize_t written = ::write(fd_, text.data() + offset, text.size() - offset);
+    if (written > 0) {
+      offset += static_cast<size_t>(written);
+      continue;
+    }
+    if (written < 0 && errno == EINTR) continue;
+    return false;
+  }
+  return true;
 }
 
 }  // namespace hsf

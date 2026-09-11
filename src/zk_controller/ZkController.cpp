@@ -184,6 +184,13 @@ void ZkController::Stop() {
   Disconnect();
 }
 
+void ZkController::SetEnabled(bool enabled) {
+  const bool wasEnabled = enabled_.exchange(enabled);
+  if (wasEnabled && !enabled) Disconnect();
+}
+
+bool ZkController::IsEnabled() const { return enabled_.load(); }
+
 bool ZkController::Connect(const std::string& ip, int port, int timeoutMs, const std::string& password) {
   reconnecting_.store(false);
   std::string connStr = BuildTcpConnectionString(ip, port, timeoutMs, password);
@@ -192,6 +199,10 @@ bool ZkController::Connect(const std::string& ip, int port, int timeoutMs, const
   std::string failure;
   {
     std::lock_guard<std::mutex> lock(clientMutex_);
+    if (!enabled_.load()) {
+      SetLastError("connect", "built-in ZK protocol driver is disabled");
+      return false;
+    }
     ok = BackendConnect(connStr);
     if (!ok) failure = BackendErrorText();
   }
@@ -635,6 +646,8 @@ void ZkController::RunLoop() {
     // Anything Connect()/Disconnect() queued from another thread, plus
     // whatever this loop's own heartbeat/reconnect queued last tick.
     DeliverConnectionEvents();
+
+    if (!enabled_.load()) continue;
 
     if (connected_.load()) {
       // Once per successful connect, on this thread rather than the caller's.

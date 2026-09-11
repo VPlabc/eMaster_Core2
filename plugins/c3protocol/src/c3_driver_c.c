@@ -28,6 +28,7 @@ struct HSFDriver {
   int timeout_ms;
   int running;
   int rtlog_keyvalue;
+  int rtlog_fallback_logged;
   char password[64];
   char last_error[160];
   uint8_t frame[C3_MAX_FRAME];
@@ -174,6 +175,18 @@ static int reconnectable(HSFStatus status) {
          status == HSF_ERR_CLOSED || status == HSF_ERR_TIMEOUT;
 }
 
+static int looks_like_keyvalue(const uint8_t* data, size_t length) {
+  size_t i;
+  size_t printable = 0;
+  int has_equals = 0;
+  for (i = 0; i < length; ++i) {
+    uint8_t c = data[i];
+    if (c == '=') has_equals = 1;
+    if ((c >= 0x20u && c <= 0x7Eu) || c == '\t' || c == '\r' || c == '\n') ++printable;
+  }
+  return has_equals && printable >= (length * 3u) / 4u;
+}
+
 static void disconnect_transport(HSFDriver* self) {
   if (self && hsf_transport_valid(self->transport) && self->transport.vt->close)
     self->transport.vt->close(self->transport.self);
@@ -248,9 +261,13 @@ static HSFStatus read_rtlog(HSFDriver* self) {
     /* A successful non-16-byte binary reply means this panel uses the
        key/value RTLog command. Switch once and stay in that mode. */
     self->rtlog_keyvalue = 1;
-    status = exchange(self, C3_RTLOG_KEYVALUE, NULL, 0, &frame_length);
+    if (looks_like_keyvalue(self->frame + 5, payload_length)) {
+      self->rtlog_fallback_logged = 1;
+    } else {
+      status = exchange(self, C3_RTLOG_KEYVALUE, NULL, 0, &frame_length);
     if (status < 0) return status;
-    payload_length = read_u16_le(self->frame + 3);
+      payload_length = read_u16_le(self->frame + 3);
+    }
   }
   if (payload_length > sizeof(self->value_buffer)) return HSF_ERR_PROTOCOL;
   memcpy(self->value_buffer, self->frame + 5, payload_length);

@@ -1,0 +1,52 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": { "major": 3, "minor": 23, "patch": 0 },
+  "configurePresets": [
+    {
+      "name": "windows-x86",
+      "displayName": "Windows x86 (ZK enabled)",
+      "generator": "Visual Studio 18 2026",
+      "architecture": "Win32",
+      "binaryDir": "${sourceDir}/build-presets/windows-x86",
+      "cacheVariables": { "HSF_ENABLE_ZK": "ON", "HSF_ENABLE_MQ": "ON", "HSF_BUILD_PLUGIN_SDK": "ON" }
+    },
+    {
+      "name": "windows-x64",
+      "displayName": "Windows x64",
+      "generator": "Visual Studio 18 2026",
+      "architecture": "x64",
+      "binaryDir": "${sourceDir}/build-presets/windows-x64",
+      "cacheVariables": { "HSF_ENABLE_ZK": "OFF", "HSF_ENABLE_MQ": "ON", "HSF_BUILD_PLUGIN_SDK": "ON" }
+    },
+    {
+      "name": "windows11-iot",
+      "displayName": "Windows 11 IoT x64",
+      "generator": "Visual Studio 18 2026",
+      "architecture": "x64",
+      "binaryDir": "${sourceDir}/build-presets/windows11-iot",
+      "cacheVariables": { "HSF_TARGET_PROFILE": "windows11-iot", "HSF_ENABLE_ZK": "OFF", "HSF_ENABLE_MQ": "ON", "HSF_BUILD_PLUGIN_SDK": "OFF" }
+    },
+    {
+      "name": "ubuntu-22",
+      "displayName": "Ubuntu 22 x86_64",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build-presets/ubuntu-22",
+      "cacheVariables": { "CMAKE_BUILD_TYPE": "Release", "HSF_ENABLE_ZK": "OFF", "HSF_BUILD_PLUGIN_SDK": "ON" }
+    },
+    {
+      "name": "ubuntu-18",
+      "displayName": "Ubuntu 18 x86_64",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build-presets/ubuntu-18",
+      "cacheVariables": { "CMAKE_BUILD_TYPE": "Release", "HSF_ENABLE_ZK": "OFF", "HSF_BUILD_PLUGIN_SDK": "ON" }
+    },
+    {
+      "name": "linux-arm64",
+      "displayName": "Linux ARM64 cross build",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build-presets/linux-arm64",
+      "toolchainFile": "${sourceDir}/cmake/toolchains/linux-arm64.cmake",
+      "cacheVariables": { "CMAKE_BUILD_TYPE": "Release", "HSF_ENABLE_ZK": "OFF", "HSF_BUILD_PLUGIN_SDK": "OFF" }
+    }
+  ]
+}

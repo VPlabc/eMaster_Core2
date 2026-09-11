@@ -1,4 +1,5 @@
 #include <atomic>
+#include <algorithm>
 #include <chrono>
 #include <csignal>
 #include <cstdlib>
@@ -15,16 +16,22 @@
 
 #include "hsf/CardClientManager.h"
 #include "hsf/ConfigManager.h"
+#include "hsf/DynamicConfigManager.h"
+#include "hsf/LuaConfigSchemaLoader.h"
 #include "hsf/LogStore.h"
 #include "hsf/LuaRuntimeManager.h"
 #include "hsf/Logger.h"
 #include "hsf/ModbusClient.h"
 #include "hsf/ModbusRegistry.h"
+#include "hsf/ModbusRegisterStore.h"
+#include "hsf/ModbusRtu.h"
+#include "hsf/ModbusTcpSlave.h"
 #include "hsf/MqClient.h"
 #include "hsf/RestClient.h"
 #include "hsf/RfidClient.h"
 #include "hsf/RuntimeVariables.h"
 #include "hsf/SerialPort.h"
+#include "hsf/ServiceRegistry.h"
 #include "hsf/WebServer.h"
 #include "hsf/lua_package/PackageManager.h"
 #include "hsf/plugin_manager/PluginManager.h"
@@ -170,6 +177,27 @@ int main(int argc, char** argv) {
   if (!hsf::ConfigManager::Instance().Load(configPath)) {
     hsf::Logger::Instance().Error(hsf::LogCategory::System, "Failed to load config from " + configPath);
     return 1;
+  }
+  hsf::DynamicConfigManager::Instance().SetDatabasePath(configPath);
+  {
+    const std::filesystem::path scriptsDir(hsf::ConfigManager::Instance().ScriptsDir());
+    std::error_code schemaEc;
+    if (std::filesystem::is_directory(scriptsDir, schemaEc)) {
+      for (const auto& entry : std::filesystem::directory_iterator(scriptsDir, schemaEc)) {
+        if (schemaEc || !entry.is_directory()) continue;
+        const std::string project = entry.path().filename().string();
+        const std::filesystem::path schemaPath = entry.path() / "config_schema.lua";
+        if (!std::filesystem::is_regular_file(schemaPath, schemaEc)) continue;
+        nlohmann::json schema;
+        std::string schemaError;
+        if (!hsf::LoadLuaConfigSchema(schemaPath.string(), schema, schemaError)) {
+          hsf::Logger::Instance().Error(hsf::LogCategory::Lua, "Failed to load dynamic config schema for " + project + ": " + schemaError);
+          continue;
+        }
+        if (!hsf::DynamicConfigManager::Instance().RegisterSchema(project, schema, schemaError))
+          hsf::Logger::Instance().Error(hsf::LogCategory::Lua, "Failed to register dynamic config schema for " + project + ": " + schemaError);
+      }
+    }
   }
 
   // --- OTA boot guard (request/CICD.md section 3) --------------------------
@@ -323,7 +351,24 @@ int main(int argc, char** argv) {
   // so a missing/wrong LED port never blocks gateway startup.
   hsf::SerialPort serial2;
   hsf::ModbusClient modbus;
-  modbus.Configure(hsf::ConfigManager::Instance().GetModbus());
+  hsf::ModbusRegisterStore modbusStore;
+  hsf::ModbusTcpSlave modbusTcpSlave(modbusStore);
+  hsf::SerialPort modbusRtuMasterPort;
+  hsf::ModbusRtuMaster modbusRtuMaster(modbusRtuMasterPort);
+  hsf::ModbusRtuSlave modbusRtuSlave(modbusStore);
+  const hsf::ModbusConfig startupModbusConfig = hsf::ConfigManager::Instance().GetModbus();
+  modbus.Configure(startupModbusConfig);
+  {
+    std::string storeError;
+    modbusStore.Configure(hsf::ModbusArea::kCoils,
+                          {startupModbusConfig.output_coil_start, startupModbusConfig.output_coil_count}, storeError);
+    modbusStore.Configure(hsf::ModbusArea::kDiscreteInputs,
+                          {startupModbusConfig.discrete_input_start, startupModbusConfig.discrete_input_count}, storeError);
+    modbusStore.Configure(hsf::ModbusArea::kInputRegisters,
+                          {startupModbusConfig.input_register_start, startupModbusConfig.input_register_count}, storeError);
+    modbusStore.Configure(hsf::ModbusArea::kHoldingRegisters,
+                          {startupModbusConfig.holding_register_start, startupModbusConfig.holding_register_count}, storeError);
+  }
 
   hsf::RfidClient rfid;
   rfid.Configure(hsf::ConfigManager::Instance().GetRfid());
@@ -338,7 +383,9 @@ int main(int argc, char** argv) {
   // 32-bit Windows DLL can load, and to C3-over-TCP everywhere else -- which is
   // what gives a Linux gateway working doors instead of
   // NotSupportedOnThisPlatform from every zk.* call.
-  zk.SetBackend(hsf::ConfigManager::Instance().GetZk().backend);
+  const hsf::ZkConfig startupZkConfig = hsf::ConfigManager::Instance().GetZk();
+  zk.SetEnabled(startupZkConfig.enabled);
+  zk.SetBackend(startupZkConfig.backend);
   // Lets RfidClient drive/observe the controller when rfid.mode is "zk".
   // Wired before Start() below, since that is when the mode takes effect.
   rfid.SetZkController(&zk);
@@ -349,11 +396,37 @@ int main(int argc, char** argv) {
   hsf::MqClient mq;
   mq.Configure(hsf::ConfigManager::Instance().GetMq());
 
+  hsf::ServiceRegistry services;
+  services.Register(hsf::ServiceNames::kRest, &rest, hsf::ServiceCapabilities::kHttpClient,
+                    hsf::ServiceLifecycleState::kConfigured, hsf::ServiceHealthState::kHealthy);
+  services.Register(hsf::ServiceNames::kSerial, &serial, hsf::ServiceCapabilities::kSerialPort,
+                    hsf::ServiceLifecycleState::kConfigured, hsf::ServiceHealthState::kUnknown);
+  services.Register(hsf::ServiceNames::kSerial2, &serial2, hsf::ServiceCapabilities::kSerialPort,
+                    hsf::ServiceLifecycleState::kConfigured, hsf::ServiceHealthState::kUnknown);
+  services.Register(hsf::ServiceNames::kModbus, &modbus, hsf::ServiceCapabilities::kFieldbus,
+                    hsf::ServiceLifecycleState::kConfigured, hsf::ServiceHealthState::kUnknown);
+  services.Register(hsf::ServiceNames::kModbusStore, &modbusStore, hsf::ServiceCapabilities::kRegisterStore,
+                    hsf::ServiceLifecycleState::kConfigured, hsf::ServiceHealthState::kHealthy);
+  services.Register(hsf::ServiceNames::kModbusRtuMaster, &modbusRtuMaster, hsf::ServiceCapabilities::kFieldbus,
+                    hsf::ServiceLifecycleState::kConfigured, hsf::ServiceHealthState::kUnknown);
+  services.Register(hsf::ServiceNames::kModbusRtuSlave, &modbusRtuSlave, hsf::ServiceCapabilities::kFieldbus,
+                    hsf::ServiceLifecycleState::kConfigured, hsf::ServiceHealthState::kUnknown);
+  services.Register(hsf::ServiceNames::kRfid, &rfid, hsf::ServiceCapabilities::kCardReader,
+                    hsf::ServiceLifecycleState::kConfigured, hsf::ServiceHealthState::kUnknown);
+  services.Register(hsf::ServiceNames::kZk, &zk, hsf::ServiceCapabilities::kAccessController,
+                    hsf::ServiceLifecycleState::kConfigured, hsf::ServiceHealthState::kUnknown);
+  services.Register(hsf::ServiceNames::kMq, &mq, hsf::ServiceCapabilities::kMessageBroker,
+                    hsf::ServiceLifecycleState::kConfigured, hsf::ServiceHealthState::kUnknown);
+  services.Register(hsf::ServiceNames::kPlugins, &plugins, hsf::ServiceCapabilities::kPluginManager,
+                    hsf::ServiceLifecycleState::kConfigured, hsf::ServiceHealthState::kHealthy);
+
   // Owns every running script (request/upgrade.md sections 20-28). Also owns
   // the single serial/ZK callback slots, fanning each event out to all live
   // runtimes -- see LuaRuntimeManager::Bind.
   hsf::LuaRuntimeManager lua;
-  lua.Bind(&rest, &serial, &serial2, &modbus, &rfid, &zk, &mq, &plugins);
+  services.Register(hsf::ServiceNames::kLua, &lua, hsf::ServiceCapabilities::kRuntime,
+                    hsf::ServiceLifecycleState::kConfigured, hsf::ServiceHealthState::kHealthy);
+  lua.Bind(&services);
 
   rfid.SetCardCallback([&lua](const std::string& uid) {
     hsf::RuntimeVariables::Instance().Set("LastRfidUid", uid);
@@ -382,9 +455,48 @@ int main(int argc, char** argv) {
                                      "LED display port not available at startup; retrying in the background");
   }
 
-  if (!modbus.Connect()) {
+  if (!startupModbusConfig.enabled) {
+    hsf::Logger::Instance().Info(hsf::LogCategory::Modbus, "Built-in Modbus driver is disabled");
+  } else if (!modbus.Connect()) {
     hsf::Logger::Instance().Warning(hsf::LogCategory::Modbus,
                                      "PLC not reachable at startup; retrying every 5s in the background");
+  }
+  if (startupModbusConfig.slave_enabled) {
+    std::string error;
+    if (!modbusTcpSlave.Start(startupModbusConfig.slave_bind, startupModbusConfig.slave_port,
+                              static_cast<uint8_t>(startupModbusConfig.slave_unit_id), error)) {
+      hsf::Logger::Instance().Error(hsf::LogCategory::Modbus, "Modbus TCP slave failed to start: " + error);
+    } else {
+      hsf::Logger::Instance().Info(hsf::LogCategory::Modbus,
+                                   "Modbus TCP slave listening on " + startupModbusConfig.slave_bind + ":" +
+                                       std::to_string(startupModbusConfig.slave_port));
+    }
+  }
+  if (startupModbusConfig.rtu_master_enabled && startupModbusConfig.rtu_slave_enabled) {
+    hsf::Logger::Instance().Error(hsf::LogCategory::Modbus,
+                                  "RTU master and slave cannot be enabled simultaneously on one serial bus");
+  } else if (startupModbusConfig.rtu_master_enabled || startupModbusConfig.rtu_slave_enabled) {
+    hsf::SerialConfig rtuConfig;
+    rtuConfig.port = startupModbusConfig.rtu_port;
+    rtuConfig.baudrate = startupModbusConfig.rtu_baudrate;
+    rtuConfig.data_bits = startupModbusConfig.rtu_data_bits;
+    rtuConfig.stop_bits = startupModbusConfig.rtu_stop_bits;
+    rtuConfig.parity = startupModbusConfig.rtu_parity;
+    std::string error;
+    const bool started = startupModbusConfig.rtu_master_enabled
+                             ? modbusRtuMaster.Start(rtuConfig, error)
+                             : modbusRtuSlave.Start(rtuConfig, static_cast<uint8_t>(startupModbusConfig.rtu_slave_id), error);
+    if (!started) {
+      hsf::Logger::Instance().Error(hsf::LogCategory::Modbus, "Modbus RTU failed to start: " + error);
+    } else {
+      services.SetLifecycle(startupModbusConfig.rtu_master_enabled ? hsf::ServiceNames::kModbusRtuMaster
+                                                                   : hsf::ServiceNames::kModbusRtuSlave,
+                            hsf::ServiceLifecycleState::kRunning);
+      hsf::Logger::Instance().Info(hsf::LogCategory::Modbus,
+                                   std::string("Modbus RTU ") +
+                                       (startupModbusConfig.rtu_master_enabled ? "master" : "slave") +
+                                       " started on " + startupModbusConfig.rtu_port);
+    }
   }
 
   rfid.Start();
@@ -402,6 +514,8 @@ int main(int argc, char** argv) {
   // for one; a gateway that merely RUNS packages is provisioned with the
   // public half and never holds the secret.
   hsf::PackageManager packages(configDirPath.string());
+  services.Register(hsf::ServiceNames::kPackages, &packages, hsf::ServiceCapabilities::kPackageManager,
+                    hsf::ServiceLifecycleState::kConfigured, hsf::ServiceHealthState::kUnknown);
   {
     std::string error;
     if (!packages.Initialise(/*wantSigningKey=*/false, error)) {
@@ -461,6 +575,8 @@ int main(int argc, char** argv) {
   }
 
   hsf::WebServer web;
+  services.Register(hsf::ServiceNames::kWeb, &web, hsf::ServiceCapabilities::kHttpServer,
+                    hsf::ServiceLifecycleState::kConfigured, hsf::ServiceHealthState::kUnknown);
 
   // Declared AFTER the web server on purpose. Its background thread pushes
   // status frames through a callback holding WebServer's pimpl, so it has to
@@ -470,6 +586,8 @@ int main(int argc, char** argv) {
   // callback as well; both, because either alone is a comment away from being
   // deleted by someone who only sees the other.
   hsf::UpdateManager updater;
+  services.Register(hsf::ServiceNames::kUpdate, &updater, hsf::ServiceCapabilities::kUpdateManager,
+                    hsf::ServiceLifecycleState::kConfigured, hsf::ServiceHealthState::kUnknown);
   updater.Configure(updateConfig, exeDir.string(), HSF_PLATFORM, HSF_VERSION,
                      std::filesystem::path(configPath).parent_path().string());
   // Shuts the gateway down the same way SIGTERM does -- scripts stopped, doors
@@ -496,11 +614,12 @@ int main(int argc, char** argv) {
     hsf::Logger::Instance().Info(hsf::LogCategory::System, "Web root: " + webRoot);
   }
   web.Configure(hsf::ConfigManager::Instance().GetWeb(), webRoot);
-  web.SetModules(&rest, &serial, &serial2, &modbus, &rfid, &lua, &mq, &zk, &updater);
-  web.SetPackageManager(&packages);
-  web.SetPluginManager(&plugins);
+  web.SetServices(&services);
   web.Start();
+  services.SetLifecycle(hsf::ServiceNames::kWeb, hsf::ServiceLifecycleState::kRunning);
+  services.SetHealth(hsf::ServiceNames::kWeb, hsf::ServiceHealthState::kHealthy);
   updater.Start();
+  services.SetLifecycle(hsf::ServiceNames::kUpdate, hsf::ServiceLifecycleState::kRunning);
 
   // Polls PLC input coils for changes so Lua's OnPlcInputChanged handler
   // fires on transitions, and mirrors module connection state into the
@@ -518,6 +637,8 @@ int main(int argc, char** argv) {
     constexpr int kPlcReconnectIntervalMs = 5000;
     auto lastReconnectAttempt = std::chrono::steady_clock::now();
     std::string lastEndpoint = modbusConfig.ip + ":" + std::to_string(modbusConfig.port);
+    bool lastModbusEnabled = modbusConfig.enabled;
+    bool lastZkEnabled = hsf::ConfigManager::Instance().GetZk().enabled;
 
     // Slower than the PLC retry: this is a real HTTP request to someone
     // else's server, so probing it every few seconds would be rude and
@@ -533,12 +654,22 @@ int main(int argc, char** argv) {
       modbusConfig = hsf::ConfigManager::Instance().GetModbus();
 
       std::string endpoint = modbusConfig.ip + ":" + std::to_string(modbusConfig.port);
-      if (endpoint != lastEndpoint) {
-        hsf::Logger::Instance().Info(hsf::LogCategory::Modbus,
-                                      "PLC address changed to " + endpoint + "; reconnecting");
+      const bool endpointChanged = endpoint != lastEndpoint;
+      const bool modbusEnabledChanged = modbusConfig.enabled != lastModbusEnabled;
+      if (endpointChanged || modbusEnabledChanged) {
+        if (modbusEnabledChanged) {
+          hsf::Logger::Instance().Info(hsf::LogCategory::Modbus,
+                                       std::string("Built-in Modbus driver ") +
+                                           (modbusConfig.enabled ? "enabled" : "disabled"));
+        } else {
+          hsf::Logger::Instance().Info(hsf::LogCategory::Modbus,
+                                       "PLC address changed to " + endpoint + "; reconnecting");
+        }
         modbus.Disconnect();
         modbus.Configure(modbusConfig);
         lastEndpoint = endpoint;
+        lastModbusEnabled = modbusConfig.enabled;
+        haveLastInputs = false;
         // Retry immediately rather than waiting out the interval -- the
         // operator just asked for this change and is watching for it.
         lastReconnectAttempt = std::chrono::steady_clock::now() -
@@ -546,7 +677,7 @@ int main(int argc, char** argv) {
       }
 
       auto now = std::chrono::steady_clock::now();
-      if (!modbus.IsConnected() &&
+      if (modbusConfig.enabled && !modbus.IsConnected() &&
           now - lastReconnectAttempt >= std::chrono::milliseconds(kPlcReconnectIntervalMs)) {
         lastReconnectAttempt = now;
         if (modbus.Connect()) {
@@ -555,6 +686,15 @@ int main(int argc, char** argv) {
           // spurious OnPlcInputChanged events on the first read back.
           haveLastInputs = false;
         }
+      }
+
+      const bool zkEnabled = hsf::ConfigManager::Instance().GetZk().enabled;
+      if (zkEnabled != lastZkEnabled) {
+        zk.SetEnabled(zkEnabled);
+        lastZkEnabled = zkEnabled;
+        hsf::Logger::Instance().Info(hsf::LogCategory::Rfid,
+                                     std::string("Built-in ZK protocol driver ") +
+                                         (zkEnabled ? "enabled" : "disabled"));
       }
 
       // REST health probe. HTTP is stateless, so there is no connection to
@@ -612,7 +752,12 @@ int main(int argc, char** argv) {
       // no single range that covers them. Fine at this scale (a handful of
       // points per poll); if a script ever registers dozens, batch them by
       // contiguous run instead.
-      if (modbus.IsConnected() && !hsf::ModbusRegistry::Instance().Empty()) {
+      if ((modbus.IsConnected() || modbusRtuMaster.IsRunning()) &&
+          !hsf::ModbusRegistry::Instance().Empty()) {
+        const bool useRtuMaster = modbusRtuMaster.IsRunning();
+        const uint8_t rtuUnitId = static_cast<uint8_t>(modbusConfig.rtu_unit_id);
+        const int rtuTimeoutMs = std::max(100, modbusConfig.poll_interval_ms);
+        std::string error;
         bool bit = false;
         // Coils (FC01) and discrete inputs (FC02) are separate address
         // spaces. Which one a given physical input lives in is vendor
@@ -625,13 +770,21 @@ int main(int argc, char** argv) {
           int usedFc = 0;
 
           if (point.source != hsf::ModbusSource::kCoil) {
-            if (modbus.ReadDiscreteInput(point.address, bit)) {
+            std::vector<bool> rtuValues;
+            if (useRtuMaster ? modbusRtuMaster.ReadBits(rtuUnitId, point.address, 1, true, rtuValues,
+                                                        rtuTimeoutMs, error)
+                             : modbus.ReadDiscreteInput(point.address, bit)) {
+              if (useRtuMaster) bit = !rtuValues.empty() && rtuValues[0];
               read = true;
               usedFc = 2;
             }
           }
           if (!read && point.source != hsf::ModbusSource::kDiscreteInput) {
-            if (modbus.ReadCoil(point.address, bit)) {
+            std::vector<bool> rtuValues;
+            if (useRtuMaster ? modbusRtuMaster.ReadBits(rtuUnitId, point.address, 1, false, rtuValues,
+                                                        rtuTimeoutMs, error)
+                             : modbus.ReadCoil(point.address, bit)) {
+              if (useRtuMaster) bit = !rtuValues.empty() && rtuValues[0];
               read = true;
               usedFc = 1;
             }
@@ -655,7 +808,11 @@ int main(int argc, char** argv) {
           }
         }
         for (const auto& point : hsf::ModbusRegistry::Instance().Outputs()) {
-          if (modbus.ReadCoil(point.address, bit)) {
+          std::vector<bool> rtuValues;
+          if (useRtuMaster ? modbusRtuMaster.ReadBits(rtuUnitId, point.address, 1, false, rtuValues,
+                                                      rtuTimeoutMs, error)
+                           : modbus.ReadCoil(point.address, bit)) {
+            if (useRtuMaster) bit = !rtuValues.empty() && rtuValues[0];
             hsf::ModbusRegistry::Instance().UpdateOutput(point.name, bit);
           }
         }
@@ -666,8 +823,11 @@ int main(int argc, char** argv) {
         for (const auto& point : hsf::ModbusRegistry::Instance().Registers()) {
           const int count = hsf::RegisterCount(point.format);
           std::vector<uint16_t> words;
-          const bool ok = point.input_register ? modbus.ReadInputRegisters(point.address, count, words)
-                                                : modbus.ReadHoldingRegisters(point.address, count, words);
+          const bool ok = useRtuMaster
+                              ? modbusRtuMaster.ReadRegisters(rtuUnitId, point.address, count,
+                                                              point.input_register, words, rtuTimeoutMs, error)
+                              : (point.input_register ? modbus.ReadInputRegisters(point.address, count, words)
+                                                       : modbus.ReadHoldingRegisters(point.address, count, words));
           if (!ok) {
             hsf::ModbusRegistry::Instance().UpdateRegisterError(
                 point.name, std::string("read failed (FC0") + (point.input_register ? "4" : "3") + ")");
@@ -708,6 +868,9 @@ int main(int argc, char** argv) {
   // that thread is what still holds anything a script asked to publish.
   mq.Stop();
   modbus.Disconnect();
+  modbusTcpSlave.Stop();
+  modbusRtuMaster.Stop();
+  modbusRtuSlave.Stop();
   serial.Close();
   serial2.Close();
   // Interrupts every running script and joins its thread, however stuck it is.

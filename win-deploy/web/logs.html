@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>eMaster Gateway - Log Viewer</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="css/app.css" rel="stylesheet">
+  <!-- Must run before first paint so the stored theme is already on <html>;
+       loading it with the scripts at the end of <body> flashes light-then-dark. -->
+  <script src="js/theme.js"></script>
+  <!-- Gates the page: redirects to /login.html when there is no session, and
+       enforces any hsf-require-role meta above. Must precede layout.js. -->
+  <script src="js/auth.js"></script>
+</head>
+<body>
+  <div id="hsfNav"></div>
+
+  <!-- Fixed-height shell: the log list scrolls inside its own container and
+       never grows the page (updateUI.md section 23). -->
+  <div class="hsf-logs-shell">
+    <!-- Two kinds of log, two panes (upgrade.md section 12). Runtime is the
+         live console tail from the in-memory ring buffer; Structured is the
+         searchable SQLite record Log.Write() fills. They have almost nothing
+         in common -- one is followed, the other is queried -- so sharing one
+         toolbar would have meant filters that apply to only half the rows. -->
+    <ul class="nav nav-tabs flex-shrink-0" role="tablist">
+      <li class="nav-item" role="presentation">
+        <button class="nav-link active" id="tabRuntimeBtn" data-bs-toggle="tab"
+                data-bs-target="#tabRuntime" type="button" role="tab">Runtime Log</button>
+      </li>
+      <li class="nav-item" role="presentation">
+        <button class="nav-link" id="tabStructuredBtn" data-bs-toggle="tab"
+                data-bs-target="#tabStructured" type="button" role="tab">Structured Logs</button>
+      </li>
+    </ul>
+
+    <!-- hsf-logs-tabs, not Bootstrap's d-flex utilities, because those carry
+         !important: on an INACTIVE pane display:flex would beat Bootstrap's
+         display:none, leaving the hidden pane laid out (and invisible, since
+         .fade without .show is opacity 0) as a blank block pushing the visible
+         pane down the page. The CSS rule only flexes the .active pane. -->
+    <div class="tab-content hsf-logs-tabs">
+      <!-- ---------------------------------------------------------------- -->
+      <!-- Runtime log: unchanged live tail                                  -->
+      <!-- ---------------------------------------------------------------- -->
+      <div class="tab-pane fade show active" id="tabRuntime" role="tabpanel">
+        <div class="d-flex gap-2 flex-wrap align-items-center hsf-logs-toolbar pt-2">
+          <select id="levelFilter" class="form-select form-select-sm" style="max-width: 140px;"
+                  title="Minimum level to show">
+            <option value="all">All levels</option>
+            <option value="DEBUG">DEBUG+</option>
+            <option value="INFO">INFO+</option>
+            <option value="WARNING">WARNING+</option>
+            <option value="ERROR">ERROR only</option>
+          </select>
+
+          <select id="categoryFilter" class="form-select form-select-sm" style="max-width: 150px;">
+            <option value="all">All categories</option>
+            <option value="System">System</option>
+            <option value="Rest">Rest</option>
+            <option value="Serial">Serial</option>
+            <option value="Modbus">Modbus</option>
+            <option value="Rfid">Rfid</option>
+            <option value="Lua">Lua</option>
+            <option value="Card">Card</option>
+            <option value="Mq">Mq</option>
+          </select>
+
+          <input id="searchBox" class="form-control form-control-sm" style="max-width: 260px;"
+                 placeholder="Search message...">
+
+          <div class="form-check form-switch mb-0 ms-1">
+            <input class="form-check-input" type="checkbox" id="autoScroll" checked>
+            <label class="form-check-label small" for="autoScroll">Auto-scroll</label>
+          </div>
+
+          <div class="form-check form-switch mb-0">
+            <input class="form-check-input" type="checkbox" id="livePause">
+            <label class="form-check-label small" for="livePause">Pause</label>
+          </div>
+
+          <span class="hsf-badge hsf-badge-idle ms-1" id="logCount">0 shown</span>
+
+          <div class="ms-auto d-flex gap-2">
+            <button id="btnClear" class="btn btn-sm btn-outline-secondary">Clear</button>
+            <button id="btnDownload" class="btn btn-sm btn-outline-secondary">Download</button>
+          </div>
+        </div>
+
+        <div class="hsf-scroll hsf-logs-body" id="logScroll">
+          <table class="table table-sm table-striped mb-0" id="logsTable">
+            <thead><tr><th>Timestamp</th><th>Level</th><th>Category</th><th>Message</th></tr></thead>
+            <tbody></tbody>
+          </table>
+          <div class="hsf-io-empty" id="logsEmpty" hidden>No log entries match the current filters.</div>
+        </div>
+      </div>
+
+      <!-- ---------------------------------------------------------------- -->
+      <!-- Structured logs: search (sections 13-16)                          -->
+      <!-- ---------------------------------------------------------------- -->
+      <div class="tab-pane fade" id="tabStructured" role="tabpanel">
+        <div class="card p-2 mt-2 flex-shrink-0">
+          <div class="row g-2 align-items-end">
+            <div class="col-auto">
+              <label class="form-label small mb-1" for="sFrom">From</label>
+              <input type="datetime-local" class="form-control form-control-sm" id="sFrom">
+            </div>
+            <div class="col-auto">
+              <label class="form-label small mb-1" for="sTo">To</label>
+              <input type="datetime-local" class="form-control form-control-sm" id="sTo">
+            </div>
+
+            <!-- Section 13: a dropdown of checkboxes, so several types can be
+                 shown at once rather than one-at-a-time. -->
+            <div class="col-auto">
+              <label class="form-label small mb-1">Log Type</label>
+              <div class="dropdown">
+                <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button"
+                        id="sTypeButton" data-bs-toggle="dropdown" data-bs-auto-close="outside"
+                        style="min-width: 150px;">All types</button>
+                <div class="dropdown-menu p-2" id="sTypeMenu" style="max-height: 320px; overflow-y: auto;">
+                  <div class="text-muted small px-1">Loading...</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="col-auto">
+              <label class="form-label small mb-1" for="sLevel">Level</label>
+              <select class="form-select form-select-sm" id="sLevel" style="min-width: 120px;">
+                <option value="all">All</option>
+                <option value="DEBUG">DEBUG</option>
+                <option value="INFO">INFO</option>
+                <option value="WARNING">WARNING</option>
+                <option value="ERROR">ERROR</option>
+              </select>
+            </div>
+
+            <div class="col-auto">
+              <label class="form-label small mb-1" for="sScript">Script</label>
+              <select class="form-select form-select-sm" id="sScript" style="min-width: 160px;">
+                <option value="">All scripts</option>
+              </select>
+            </div>
+
+            <div class="col">
+              <label class="form-label small mb-1" for="sKeyword">Keyword</label>
+              <input class="form-control form-control-sm" id="sKeyword"
+                     placeholder="Any field value, e.g. NGUYEN VAN A">
+            </div>
+
+            <div class="col-auto">
+              <label class="form-label small mb-1" for="sLimit">Per page</label>
+              <select class="form-select form-select-sm" id="sLimit">
+                <option>25</option>
+                <option selected>50</option>
+                <option>100</option>
+                <option>200</option>
+              </select>
+            </div>
+
+            <div class="col-auto d-flex gap-2">
+              <button class="btn btn-sm btn-primary" id="btnSearch">Search</button>
+              <button class="btn btn-sm btn-outline-secondary" id="btnResetSearch">Reset</button>
+              <button class="btn btn-sm btn-outline-secondary" id="btnExportCsv"
+                      title="Download the current page as CSV">CSV</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="d-flex align-items-center gap-2 mt-2 flex-shrink-0">
+          <span class="hsf-badge hsf-badge-idle" id="sCount">0 entries</span>
+          <span class="text-muted small" id="sRange"></span>
+          <div class="ms-auto d-flex align-items-center gap-1" id="sPager"></div>
+        </div>
+
+        <div class="d-flex gap-2 flex-grow-1 mt-2" style="min-height: 0;">
+          <div class="hsf-scroll flex-grow-1" style="min-height: 0;">
+            <table class="table table-sm table-striped mb-0" id="sTable">
+              <thead><tr></tr></thead>
+              <tbody></tbody>
+            </table>
+            <div class="hsf-io-empty" id="sEmpty">No structured log entries match the current filters.</div>
+          </div>
+
+          <!-- Section 15: selecting a row shows its complete dynamic fields.
+               A side panel rather than a modal, so an operator can click down a
+               list of results and read each one without dismissing a dialog
+               between every row. -->
+          <aside class="card p-2 hsf-scroll" id="sDetail" style="width: 320px; min-height: 0;" hidden>
+            <div class="d-flex align-items-center">
+              <div class="hsf-panel-title mb-0" id="sDetailTitle">Entry</div>
+              <button class="btn btn-sm btn-outline-secondary ms-auto py-0 px-1" id="btnCloseDetail"
+                      title="Close">&times;</button>
+            </div>
+            <dl class="mb-0 mt-2 small" id="sDetailFields"></dl>
+          </aside>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="js/layout.js"></script>
+  <!-- Update popup: on every page with the shared chrome, so a release that
+       lands while someone is on Logs or Test Tools is still noticed. -->
+  <script src="js/update.js"></script>
+  <script src="js/ws.js"></script>
+  <script src="js/logs.js"></script>
+  <script src="js/logs_structured.js"></script>
+</body>
+</html>

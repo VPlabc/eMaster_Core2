@@ -6,13 +6,13 @@
   var submit = document.getElementById("loginSubmit");
 
   function showError(message) {
-    errorBox.textContent = message;
-    errorBox.classList.remove("d-none");
+    errorBox.className = "d-none";
+    if (window.HsfAlert) window.HsfAlert(message, "Sign in failed", "error");
   }
 
   function clearError() {
     errorBox.textContent = "";
-    errorBox.classList.add("d-none");
+    errorBox.className = "d-none";
   }
 
   form.addEventListener("submit", function (event) {

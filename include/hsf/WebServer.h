@@ -4,6 +4,7 @@
 #include <string>
 
 #include "hsf/ConfigManager.h"
+#include "hsf/ServiceRegistry.h"
 
 namespace hsf {
 
@@ -29,29 +30,11 @@ class WebServer {
   ~WebServer();
 
   void Configure(const WebConfig& config, const std::string& webRoot);
-  // `serial2` is the LED display port. Needed here for the same reason as
-  // `serial`: the gateway holds both open for its whole run, so the
-  // Configuration page's test buttons have to work THROUGH the live port
-  // instead of trying to open a second exclusive handle to it.
-  // `zk` is the gateway's OWN controller session, not a probe: the Test Tool
-  // (Test Tool plan sections 41-48) has to drive the same connection the Lua
-  // application uses, or its RTLog stream would be a second SDK session showing
-  // events the running system never saw. That sharing is also why its relay
-  // controls are admin-only -- they can open a real door out from under the
-  // locker state machine.
-  // `update` is the OTA manager. It is here rather than driven from a page of
-  // its own because the update popup has to be reachable from every page --
-  // an operator who is looking at the Logs tab when a security release lands
-  // should see it there.
-  void SetModules(RestClient* rest, SerialPort* serial, SerialPort* serial2, ModbusClient* modbus,
-                   RfidClient* rfid, LuaRuntimeManager* lua, MqClient* mq, ZkController* zk,
-                   UpdateManager* update);
-
-  // Production Lua packaging (request/AdvanceUpdate.md Phase 2). Its own
-  // setter rather than a tenth parameter on SetModules: that list is already
-  // long enough that a caller has to count commas to see what it is passing.
-  void SetPackageManager(PackageManager* packages);
-  void SetPluginManager(PluginManager* plugins);
+  // Services are resolved by name/capability from the registry instead of
+  // being passed as a fixed positional list. This keeps current behaviour
+  // while removing the chokepoint that made every new built-in module a
+  // header/signature change here and in main.cpp.
+  void SetServices(ServiceRegistry* services);
 
   // Starts the HTTP/WebSocket server and the realtime broadcast loop on
   // background threads; returns immediately.

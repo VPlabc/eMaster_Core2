@@ -1,0 +1,18 @@
+[package]
+name = "emaster-lua"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+emaster-config = { path = "../emaster-config" }
+emaster-http = { path = "../emaster-http" }
+emaster-mqtt = { path = "../emaster-mqtt" }
+emaster-rabbitmq = { path = "../emaster-rabbitmq" }
+emaster-runtime = { path = "../emaster-runtime" }
+
+[features]
+production-transports = [
+    "emaster-mqtt/production-transport",
+    "emaster-rabbitmq/production-transport",
+]

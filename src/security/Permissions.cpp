@@ -221,6 +221,8 @@ const std::vector<RoutePolicy>& RoutePolicies() {
       {"/api/lua/runtimes/prune", "", Guard::kPermission, Permission::kLuaRun},
       {"/api/lua/scripts", "", Guard::kPermission, Permission::kLuaRead},
       {"/api/lua/runtime*", "", Guard::kPermission, Permission::kLuaRead},
+      {"/api/lua/projects*", "GET", Guard::kPermission, Permission::kLuaRead},
+      {"/api/lua/projects*", "PUT", Guard::kPermission, Permission::kSystemConfigWrite},
 
       // -- production Lua packages (Phase 2) ----------------------------------
       // Three separate permissions, because these are three different jobs.

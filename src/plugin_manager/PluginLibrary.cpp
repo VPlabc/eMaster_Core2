@@ -74,7 +74,18 @@ bool PluginLibrary::Open(const std::string& path, std::string& error) {
   path_ = path;
 
 #if defined(_WIN32)
+  // Invalid plugin images must return an error even on unattended runners.
+  // The default loader error dialog can otherwise block until a user clicks it.
+  DWORD previousMode = 0;
+  if (!SetThreadErrorMode(GetThreadErrorMode() | SEM_FAILCRITICALERRORS,
+                          &previousMode)) {
+    error = "cannot configure plugin loader error mode: " + LastOsError();
+    return false;
+  }
   handle_ = static_cast<void*>(LoadLibraryA(path.c_str()));
+  const DWORD loadError = GetLastError();
+  SetThreadErrorMode(previousMode, nullptr);
+  SetLastError(loadError);
 #else
   // RTLD_LOCAL, not RTLD_GLOBAL: a plugin's symbols must not join the global
   // namespace, or two plugins carrying differently-built copies of the same

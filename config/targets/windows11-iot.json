@@ -1,0 +1,12 @@
+{
+  "platform": "windows",
+  "distribution": "windows-11-iot",
+  "architecture": "x64",
+  "zk": false,
+  "plugin_sdk": false,
+  "compiler": "MSVC",
+  "dependencies": "vcpkg-x64-windows",
+  "install_layout": "current/data",
+  "package_format": "zip",
+  "runtime_verification": "pending-target-environment"
+}

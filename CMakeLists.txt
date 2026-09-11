@@ -9,7 +9,8 @@ if(NOT HSF_VERSION MATCHES "^[0-9]+\\.[0-9]+\\.[0-9]+")
   message(FATAL_ERROR "VERSION must contain a semantic version like 1.0.0, got '${HSF_VERSION}'")
 endif()
 
-project(hsf_smart_gateway VERSION ${HSF_VERSION} LANGUAGES CXX)
+string(REGEX MATCH "^[0-9]+\\.[0-9]+\\.[0-9]+" HSF_PROJECT_VERSION "${HSF_VERSION}")
+project(hsf_smart_gateway VERSION ${HSF_PROJECT_VERSION} LANGUAGES CXX)
 
 # --- ZKTeco controller support -------------------------------------------
 #
@@ -136,6 +137,8 @@ set(HSF_SOURCES
   # (config.db, logs.db, clients.db), which own their own schemas.
   src/SqlDatabase.cpp
   src/ConfigManager.cpp
+  src/DynamicConfigManager.cpp
+  src/LuaConfigSchemaLoader.cpp
   src/CardCache.cpp
   src/CardClientManager.cpp
   src/SystemMonitor.cpp
@@ -143,6 +146,10 @@ set(HSF_SOURCES
   src/SerialPort.cpp
   src/ModbusClient.cpp
   src/ModbusCodec.cpp
+  src/ModbusProtocol.cpp
+  src/ModbusRegisterStore.cpp
+  src/ModbusRtu.cpp
+  src/ModbusTcpSlave.cpp
   src/ModbusRegistry.cpp
   src/TcpSocket.cpp
   src/RfidClient.cpp
@@ -191,6 +198,8 @@ set(HSF_SOURCES
   src/update/Downloader.cpp
   src/update/UpdateInstaller.cpp
   src/update/UpdateManager.cpp
+  src/ffi/c3.cpp
+  src/ffi/connectivity.cpp
 )
 
 # The only file that touches the PullSDK C ABI. Everything above it --
@@ -342,10 +351,14 @@ elseif(HSF_PLATFORM_ARCH MATCHES "^(i.86|x86)$")
   set(HSF_PLATFORM_ARCH "x86")
 elseif(HSF_PLATFORM_ARCH MATCHES "^(aarch64|arm64)$")
   set(HSF_PLATFORM_ARCH "arm64")
+elseif(HSF_PLATFORM_ARCH MATCHES "^(arm|armv7l|armv8l|armhf)$")
+  set(HSF_PLATFORM_ARCH "armhf")
 endif()
 # MSVC reports the HOST processor, so a Win32 build on an x64 machine would
 # otherwise be labelled x64 -- take the pointer width as the authority.
-if(WIN32 AND CMAKE_SIZEOF_VOID_P EQUAL 4)
+if(WIN32 AND (CMAKE_GENERATOR_PLATFORM STREQUAL "ARM64" OR CMAKE_VS_PLATFORM_NAME STREQUAL "ARM64"))
+  set(HSF_PLATFORM_ARCH "arm64")
+elseif(WIN32 AND CMAKE_SIZEOF_VOID_P EQUAL 4)
   set(HSF_PLATFORM_ARCH "x86")
 endif()
 set(HSF_PLATFORM "${HSF_PLATFORM_OS}-${HSF_PLATFORM_ARCH}")
@@ -396,6 +409,62 @@ if(HSF_BUILD_PLUGIN_SDK AND EXISTS "${CMAKE_SOURCE_DIR}/sdk/hsf-plugin-sdk/CMake
   # makes their tests runnable by path, but `ctest --test-dir build` reports
   # "No tests were found" and never descends into them.
   enable_testing()
+  add_executable(hsf_service_registry_tests tests/test_service_registry.cpp)
+  target_include_directories(hsf_service_registry_tests PRIVATE
+    "${CMAKE_SOURCE_DIR}/include")
+  target_link_libraries(hsf_service_registry_tests PRIVATE Threads::Threads)
+  add_test(NAME hsf_service_registry_tests COMMAND hsf_service_registry_tests)
+  set_tests_properties(hsf_service_registry_tests PROPERTIES TIMEOUT 120)
+  add_executable(hsf_c3_ffi_tests
+    tests/test_c3_ffi.cpp
+    src/zk_controller/C3Codec.cpp
+    src/zk_controller/C3Client.cpp
+    src/TcpSocket.cpp
+    src/Logger.cpp
+    src/ffi/c3.cpp)
+  target_include_directories(hsf_c3_ffi_tests PRIVATE include)
+  target_link_libraries(hsf_c3_ffi_tests PRIVATE nlohmann_json::nlohmann_json)
+  if(WIN32)
+    target_link_libraries(hsf_c3_ffi_tests PRIVATE ws2_32)
+  endif()
+  add_test(NAME hsf_c3_ffi_tests COMMAND hsf_c3_ffi_tests)
+  set_tests_properties(hsf_c3_ffi_tests PROPERTIES TIMEOUT 120)
+  add_executable(hsf_connectivity_abi_tests
+    tests/test_connectivity_abi.cpp
+    src/ffi/connectivity.cpp)
+  target_include_directories(hsf_connectivity_abi_tests PRIVATE include)
+  add_test(NAME hsf_connectivity_abi_tests COMMAND hsf_connectivity_abi_tests)
+  set_tests_properties(hsf_connectivity_abi_tests PROPERTIES TIMEOUT 120)
+  add_executable(hsf_dynamic_config_tests
+    tests/test_dynamic_config.cpp
+    src/DynamicConfigManager.cpp)
+  target_include_directories(hsf_dynamic_config_tests PRIVATE include)
+  target_link_libraries(hsf_dynamic_config_tests PRIVATE nlohmann_json::nlohmann_json SQLite3::SQLite3)
+  add_test(NAME hsf_dynamic_config_tests COMMAND hsf_dynamic_config_tests)
+  set_tests_properties(hsf_dynamic_config_tests PROPERTIES TIMEOUT 120)
+  add_executable(hsf_modbus_protocol_tests
+    tests/test_modbus_protocol.cpp
+    src/ModbusProtocol.cpp
+    src/ModbusRegisterStore.cpp)
+  target_include_directories(hsf_modbus_protocol_tests PRIVATE include)
+  add_test(NAME hsf_modbus_protocol_tests COMMAND hsf_modbus_protocol_tests)
+  set_tests_properties(hsf_modbus_protocol_tests PROPERTIES TIMEOUT 120)
+  add_executable(hsf_modbus_rtu_tests
+    tests/test_modbus_rtu.cpp
+    src/ModbusRtu.cpp
+    src/ModbusProtocol.cpp
+    src/ModbusRegisterStore.cpp
+    src/SerialPort.cpp
+    src/Logger.cpp)
+  if(WIN32)
+    target_sources(hsf_modbus_rtu_tests PRIVATE src/SerialPort_win.cpp)
+  else()
+    target_sources(hsf_modbus_rtu_tests PRIVATE src/SerialPort_posix.cpp)
+  endif()
+  target_include_directories(hsf_modbus_rtu_tests PRIVATE include)
+  target_link_libraries(hsf_modbus_rtu_tests PRIVATE nlohmann_json::nlohmann_json)
+  add_test(NAME hsf_modbus_rtu_tests COMMAND hsf_modbus_rtu_tests)
+  set_tests_properties(hsf_modbus_rtu_tests PROPERTIES TIMEOUT 120)
   # The subproject's own options decide what it builds; EXCLUDE_FROM_ALL would
   # skip its tests, which are the reason to build it here at all.
   add_subdirectory(sdk/hsf-plugin-sdk)

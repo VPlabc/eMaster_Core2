@@ -1,0 +1,5 @@
+self-hosted-runner:
+  labels:
+    - linux-arm64
+    - linux-armhf
+    - windows-arm64

@@ -10,6 +10,14 @@ set "BUILD_DIR=%ROOT%build-win"
 set "CFG=%~1"
 if "%CFG%"=="" set "CFG=Release"
 
+rem WindowsApps contains execution-alias shims (notably pwsh.exe) that can
+rem fail under vcpkg's child-process detection. Remove that shim directory
+rem before CMake/vcpkg choose host tools; vcpkg can then use its cached tools
+rem or download the pinned PowerShell Core version normally.
+set "WINAPPS=%LOCALAPPDATA%\Microsoft\WindowsApps"
+set "PATH=!PATH:%WINAPPS%;=!"
+set "PATH=!PATH:;%WINAPPS%=!"
+
 rem Capture %ProgramFiles(x86)% into a plain var *before* any parenthesized
 rem block below -- its own literal "(x86)" breaks cmd's paren-block parsing
 rem if referenced directly inside an if/else (...) block.
@@ -60,7 +68,10 @@ rem x86, not x64: src/zk_controller links plcommpro.dll, a 32-bit-only DLL
 rem (request/HSF_Machine_ZK_Controller_Lua_Integration.md section 12) --
 rem CMakeLists.txt's own guard will FATAL_ERROR if this ever drifts back to x64.
 echo [build.bat] Configuring into "%BUILD_DIR%" ^(first run installs vcpkg deps from source - can take 15-30+ min^)...
-"!CMAKE!" --fresh -S "%ROOT%." -B "%BUILD_DIR%" -A Win32 -DVCPKG_TARGET_TRIPLET=x86-windows -DCMAKE_TOOLCHAIN_FILE="%VCPKG_DIR%\scripts\buildsystems\vcpkg.cmake"
+rem WindowsApps may expose a broken pwsh.exe shim to vcpkg. Pin the
+rem PowerShell implementation used by the toolchain to the system binary.
+set "VCPKG_POWERSHELL=%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe"
+"!CMAKE!" --fresh -S "%ROOT%." -B "%BUILD_DIR%" -A Win32 -DVCPKG_TARGET_TRIPLET=x86-windows -DZ_VCPKG_POWERSHELL_PATH="%VCPKG_POWERSHELL%" -DCMAKE_TOOLCHAIN_FILE="%VCPKG_DIR%\scripts\buildsystems\vcpkg.cmake"
 if errorlevel 1 (
     echo [build.bat] Configure failed.
     exit /b 1
@@ -73,6 +84,25 @@ if errorlevel 1 (
     echo [build.bat] Build failed.
     exit /b 1
 )
+
+rem --- Build the additive Rust Core workspace -------------------------------
+rem The Rust crates are currently a standalone workspace; this produces
+rem target\release artifacts without replacing the native gateway executable.
+where cargo >nul 2>nul
+if errorlevel 1 (
+    echo [build.bat] ERROR: cargo not found on PATH. Install Rust via rustup.
+    exit /b 1
+)
+echo [build.bat] Building Rust Core workspace (Release)...
+pushd "%ROOT%"
+cargo build --workspace --release
+if errorlevel 1 (
+    popd
+    echo [build.bat] Rust Core build failed.
+    exit /b 1
+)
+popd
+echo [build.bat] Rust Core build succeeded: %ROOT%target\release
 
 echo [build.bat] Build succeeded: %BUILD_DIR%\%CFG%\hsf_gateway.exe
 endlocal

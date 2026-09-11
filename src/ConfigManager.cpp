@@ -187,6 +187,7 @@ bool ConfigManager::Load(const std::string& path) {
       std::string parity = value.value("parity", std::string(1, serial2_.parity));
       serial2_.parity = parity.empty() ? 'N' : parity[0];
     } else if (section == "modbus") {
+      modbus_.enabled = value.value("enabled", modbus_.enabled);
       modbus_.ip = value.value("ip", modbus_.ip);
       modbus_.port = value.value("port", modbus_.port);
       modbus_.input_coil_start = value.value("input_coil_start", modbus_.input_coil_start);
@@ -195,6 +196,24 @@ bool ConfigManager::Load(const std::string& path) {
       modbus_.output_coil_count = value.value("output_coil_count", modbus_.output_coil_count);
       modbus_.holding_register_start = value.value("holding_register_start", modbus_.holding_register_start);
       modbus_.holding_register_count = value.value("holding_register_count", modbus_.holding_register_count);
+      modbus_.slave_enabled = value.value("slave_enabled", modbus_.slave_enabled);
+      modbus_.slave_bind = value.value("slave_bind", modbus_.slave_bind);
+      modbus_.slave_port = value.value("slave_port", modbus_.slave_port);
+      modbus_.slave_unit_id = value.value("slave_unit_id", modbus_.slave_unit_id);
+      modbus_.discrete_input_start = value.value("discrete_input_start", modbus_.discrete_input_start);
+      modbus_.discrete_input_count = value.value("discrete_input_count", modbus_.discrete_input_count);
+      modbus_.input_register_start = value.value("input_register_start", modbus_.input_register_start);
+      modbus_.input_register_count = value.value("input_register_count", modbus_.input_register_count);
+      modbus_.rtu_port = value.value("rtu_port", modbus_.rtu_port);
+      modbus_.rtu_master_enabled = value.value("rtu_master_enabled", modbus_.rtu_master_enabled);
+      modbus_.rtu_baudrate = value.value("rtu_baudrate", modbus_.rtu_baudrate);
+      modbus_.rtu_data_bits = value.value("rtu_data_bits", modbus_.rtu_data_bits);
+      modbus_.rtu_stop_bits = value.value("rtu_stop_bits", modbus_.rtu_stop_bits);
+      std::string rtuParity = value.value("rtu_parity", std::string(1, modbus_.rtu_parity));
+      modbus_.rtu_parity = rtuParity.empty() ? 'N' : rtuParity[0];
+      modbus_.rtu_unit_id = value.value("rtu_unit_id", modbus_.rtu_unit_id);
+      modbus_.rtu_slave_enabled = value.value("rtu_slave_enabled", modbus_.rtu_slave_enabled);
+      modbus_.rtu_slave_id = value.value("rtu_slave_id", modbus_.rtu_slave_id);
       modbus_.poll_interval_ms = value.value("poll_interval_ms", modbus_.poll_interval_ms);
     } else if (section == "rfid") {
       rfid_.mode = value.value("mode", rfid_.mode);
@@ -203,6 +222,7 @@ bool ConfigManager::Load(const std::string& path) {
       rfid_.reconnect_interval_ms = value.value("reconnect_interval_ms", rfid_.reconnect_interval_ms);
       rfid_.timeout_ms = value.value("timeout_ms", rfid_.timeout_ms);
     } else if (section == "zk") {
+      zk_.enabled = value.value("enabled", zk_.enabled);
       zk_.ip = value.value("ip", zk_.ip);
       zk_.port = value.value("port", zk_.port);
       zk_.timeout_ms = value.value("timeout_ms", zk_.timeout_ms);
@@ -335,8 +355,26 @@ std::string ConfigManager::ScriptsDir() const {
   }
 
   std::filesystem::path script = scriptPath;
-  if (!script.empty() && !script.parent_path().empty()) {
-    return script.parent_path().string();
+  if (!script.empty()) {
+    std::error_code ec;
+    if (std::filesystem::is_directory(script, ec)) {
+      return script.string();
+    }
+
+    // script_path may point at a project entry script such as
+    // scripts/CardDispenser/main.lua. The Lua root is the directory above the
+    // project folder, not the project folder itself.
+    if (script.extension() == ".lua" && !script.parent_path().empty()) {
+      const auto projectDir = script.parent_path();
+      if (std::filesystem::is_regular_file(projectDir / "config_schema.lua", ec)) {
+        return projectDir.parent_path().string();
+      }
+      return projectDir.string();
+    }
+
+    if (!script.parent_path().empty()) {
+      return script.parent_path().string();
+    }
   }
   return (std::filesystem::path(configPath).parent_path() / "scripts").string();
 }
@@ -499,6 +537,7 @@ bool ConfigManager::ApplyJson(const nlohmann::json& patch) {
     }
     if (patch.contains("modbus")) {
       const auto& m = patch["modbus"];
+      modbus_.enabled = m.value("enabled", modbus_.enabled);
       modbus_.ip = m.value("ip", modbus_.ip);
       modbus_.port = m.value("port", modbus_.port);
       modbus_.input_coil_start = m.value("input_coil_start", modbus_.input_coil_start);
@@ -507,6 +546,24 @@ bool ConfigManager::ApplyJson(const nlohmann::json& patch) {
       modbus_.output_coil_count = m.value("output_coil_count", modbus_.output_coil_count);
       modbus_.holding_register_start = m.value("holding_register_start", modbus_.holding_register_start);
       modbus_.holding_register_count = m.value("holding_register_count", modbus_.holding_register_count);
+      modbus_.slave_enabled = m.value("slave_enabled", modbus_.slave_enabled);
+      modbus_.slave_bind = m.value("slave_bind", modbus_.slave_bind);
+      modbus_.slave_port = m.value("slave_port", modbus_.slave_port);
+      modbus_.slave_unit_id = m.value("slave_unit_id", modbus_.slave_unit_id);
+      modbus_.discrete_input_start = m.value("discrete_input_start", modbus_.discrete_input_start);
+      modbus_.discrete_input_count = m.value("discrete_input_count", modbus_.discrete_input_count);
+      modbus_.input_register_start = m.value("input_register_start", modbus_.input_register_start);
+      modbus_.input_register_count = m.value("input_register_count", modbus_.input_register_count);
+      modbus_.rtu_port = m.value("rtu_port", modbus_.rtu_port);
+      modbus_.rtu_master_enabled = m.value("rtu_master_enabled", modbus_.rtu_master_enabled);
+      modbus_.rtu_baudrate = m.value("rtu_baudrate", modbus_.rtu_baudrate);
+      modbus_.rtu_data_bits = m.value("rtu_data_bits", modbus_.rtu_data_bits);
+      modbus_.rtu_stop_bits = m.value("rtu_stop_bits", modbus_.rtu_stop_bits);
+      std::string rtuParity = m.value("rtu_parity", std::string(1, modbus_.rtu_parity));
+      modbus_.rtu_parity = rtuParity.empty() ? 'N' : rtuParity[0];
+      modbus_.rtu_unit_id = m.value("rtu_unit_id", modbus_.rtu_unit_id);
+      modbus_.rtu_slave_enabled = m.value("rtu_slave_enabled", modbus_.rtu_slave_enabled);
+      modbus_.rtu_slave_id = m.value("rtu_slave_id", modbus_.rtu_slave_id);
       modbus_.poll_interval_ms = m.value("poll_interval_ms", modbus_.poll_interval_ms);
     }
     if (patch.contains("rfid")) {
@@ -519,6 +576,7 @@ bool ConfigManager::ApplyJson(const nlohmann::json& patch) {
     }
     if (patch.contains("zk")) {
       const auto& z = patch["zk"];
+      zk_.enabled = z.value("enabled", zk_.enabled);
       zk_.ip = z.value("ip", zk_.ip);
       zk_.port = z.value("port", zk_.port);
       zk_.timeout_ms = z.value("timeout_ms", zk_.timeout_ms);
@@ -628,7 +686,8 @@ nlohmann::json ConfigManager::ToJsonUnlocked() const {
                       {"data_bits", serial2_.data_bits},
                       {"stop_bits", serial2_.stop_bits},
                       {"parity", std::string(1, serial2_.parity)}};
-  root["modbus"] = {{"ip", modbus_.ip},
+  root["modbus"] = {{"enabled", modbus_.enabled},
+                     {"ip", modbus_.ip},
                      {"port", modbus_.port},
                      {"input_coil_start", modbus_.input_coil_start},
                      {"input_coil_count", modbus_.input_coil_count},
@@ -636,13 +695,31 @@ nlohmann::json ConfigManager::ToJsonUnlocked() const {
                      {"output_coil_count", modbus_.output_coil_count},
                      {"holding_register_start", modbus_.holding_register_start},
                      {"holding_register_count", modbus_.holding_register_count},
+                     {"slave_enabled", modbus_.slave_enabled},
+                     {"slave_bind", modbus_.slave_bind},
+                     {"slave_port", modbus_.slave_port},
+                     {"slave_unit_id", modbus_.slave_unit_id},
+                     {"discrete_input_start", modbus_.discrete_input_start},
+                     {"discrete_input_count", modbus_.discrete_input_count},
+                     {"input_register_start", modbus_.input_register_start},
+                     {"input_register_count", modbus_.input_register_count},
+                     {"rtu_port", modbus_.rtu_port},
+                     {"rtu_master_enabled", modbus_.rtu_master_enabled},
+                     {"rtu_baudrate", modbus_.rtu_baudrate},
+                     {"rtu_data_bits", modbus_.rtu_data_bits},
+                     {"rtu_stop_bits", modbus_.rtu_stop_bits},
+                     {"rtu_parity", std::string(1, modbus_.rtu_parity)},
+                     {"rtu_unit_id", modbus_.rtu_unit_id},
+                     {"rtu_slave_enabled", modbus_.rtu_slave_enabled},
+                     {"rtu_slave_id", modbus_.rtu_slave_id},
                      {"poll_interval_ms", modbus_.poll_interval_ms}};
   root["rfid"] = {{"mode", rfid_.mode},
                   {"ip", rfid_.ip},
                   {"port", rfid_.port},
                   {"reconnect_interval_ms", rfid_.reconnect_interval_ms},
                   {"timeout_ms", rfid_.timeout_ms}};
-  root["zk"] = {{"ip", zk_.ip},
+  root["zk"] = {{"enabled", zk_.enabled},
+                {"ip", zk_.ip},
                 {"port", zk_.port},
                 {"timeout_ms", zk_.timeout_ms},
                 {"password", zk_.password},

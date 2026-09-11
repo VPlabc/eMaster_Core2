@@ -1,0 +1,4 @@
+The local database (smartlocker.json), its .bak sibling and the test database
+are written here. The directory is kept in the repository so the first run has
+somewhere to write; the databases themselves are gitignored -- they hold who is
+in which locker.

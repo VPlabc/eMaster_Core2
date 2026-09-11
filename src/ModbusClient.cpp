@@ -420,6 +420,8 @@ void ModbusClient::NoteTransactionResultUnlocked(bool ok) {
 bool ModbusClient::Connect() {
   std::lock_guard<std::mutex> lock(mutex_);
 
+  if (!config_.enabled) return false;
+
   // Must match IsConnected()'s definition, not just the flag. The socket can
   // close underneath us -- peer reset, or a failed send closing it -- which
   // leaves connected_ stale: IsConnected() correctly says false, but a

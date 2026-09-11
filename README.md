@@ -1,4 +1,4 @@
-# eMaster Core
+# eMaster Gateway
 
 A cross-platform (Linux / Windows / macOS) Smart Gateway backend that bridges an
 external REST server with industrial hardware — a USB Serial Citizen ID card

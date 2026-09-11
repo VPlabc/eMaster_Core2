@@ -1,6 +1,8 @@
 #pragma once
 
 #include <atomic>
+#include <condition_variable>
+#include <deque>
 #include <functional>
 #include <mutex>
 #include <string>
@@ -56,7 +58,14 @@ class SerialPort {
   // manage the port themselves.
   void SetAutoReopen(bool enable);
 
+  // Queues a complete frame for this port's dedicated transmit worker. It
+  // returns once the frame is accepted, never after the physical serial write.
   bool Write(const std::string& text);
+
+  // As Write(), except queued frames that have not started transmitting are
+  // discarded. Suitable for a display, where the newest status is the only
+  // one that matters after a stalled adapter recovers.
+  bool WriteLatest(const std::string& text);
 
   void SetDataCallback(DataCallback callback);
 
@@ -72,6 +81,8 @@ class SerialPort {
 
  private:
   void ReadLoop();
+  void WriteLoop();
+  bool QueueWrite(const std::string& text, bool replacePending);
 
   // Platform-specific: opens/reads/writes/closes the underlying handle.
   bool PlatformOpen(const SerialConfig& config);
@@ -96,9 +107,16 @@ class SerialPort {
 
   std::atomic<bool> open_{false};
   std::atomic<bool> stopRequested_{false};
+  std::atomic<bool> writeStopRequested_{false};
   std::atomic<bool> autoReopen_{false};
   std::atomic<State> state_{State::Closed};
   std::thread readThread_;
+  // Each SerialPort owns an independent TX queue and worker. In particular,
+  // Serial2 can never block the citizen-reader Serial port or the Lua thread.
+  std::thread writeThread_;
+  std::mutex writeQueueMutex_;
+  std::condition_variable writeQueueCv_;
+  std::deque<std::string> writeQueue_;
   std::mutex callbackMutex_;
   DataCallback callback_;
   std::string lineBuffer_;

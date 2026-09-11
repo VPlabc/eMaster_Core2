@@ -1,196 +1,86 @@
-# Continuous build (request/release.md section 28).
-#
-# Builds the two configurations that differ meaningfully -- Windows x86 with
-# the ZKTeco PullSDK, and Linux x64 without it -- so a change that breaks the
-# stub path (or the real one) is caught before release day rather than during
-# packaging.
-#
-# There is no unit or integration test stage because the project has no test
-# suite yet; the Lua syntax check below is the only automated validation that
-# exists. Adding empty test steps here would make the pipeline look like it
-# verifies more than it does.
-name: build
-
+name: Gateway CI
 on:
   push:
-    branches: ['**']
+    branches: [main, develop, 'release/**', 'feature/**', 'fix/**']
   pull_request:
+    branches: [main, develop, 'release/**']
   workflow_dispatch:
-
-env:
-  VCPKG_DISABLE_METRICS: '1'
-
+permissions:
+  contents: read
+concurrency:
+  group: gateway-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
-  windows-x86:
-    name: Windows x86 (ZK enabled)
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0   # CMake stamps the short commit hash into the binary
-
-      - name: Set up vcpkg
-        uses: lukka/run-vcpkg@v11
-        with:
-          vcpkgGitCommitId: '${{ hashFiles(''vcpkg.json'') }}'
-          runVcpkgInstall: false
-
-      - name: Configure
-        run: >
-          cmake -S . -B build -A Win32
-          -DVCPKG_TARGET_TRIPLET=x86-windows
-          -DHSF_ENABLE_ZK=ON
-          -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake
-
-      - name: Build
-        run: cmake --build build --config Release
-
-      - name: Version
-        run: .\build\Release\hsf_gateway.exe --version
-
-      # The whole point of this job: prove ZK really is compiled in here.
-      - name: Assert ZK enabled
-        shell: pwsh
-        run: |
-          $out = .\build\Release\hsf_gateway.exe --version | Out-String
-          if ($out -notmatch 'ZK controller: enabled') {
-            throw "Expected a ZK-enabled build on Windows x86, got:`n$out"
-          }
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: hsf_gateway-windows-x86
-          path: build/Release/
-
-  linux-x64:
-    name: Linux x64 (ZK disabled)
-    runs-on: ubuntu-latest
+  validate:
+    runs-on: ubuntu-22.04
+    outputs:
+      build: ${{ steps.paths.outputs.build }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
-      - name: Install build dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential cmake ninja-build pkg-config \
-            curl zip unzip tar autoconf automake libtool lua5.4
-
-      - name: Set up vcpkg
-        uses: lukka/run-vcpkg@v11
+          persist-credentials: false
+      - uses: actions/setup-python@v5
         with:
-          vcpkgGitCommitId: '${{ hashFiles(''vcpkg.json'') }}'
-          runVcpkgInstall: false
-
-      - name: Configure
-        run: >
-          cmake -S . -B build -G Ninja
-          -DCMAKE_BUILD_TYPE=Release
-          -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake
-
-      - name: Build
-        run: cmake --build build
-
-      - name: Version
-        run: ./build/hsf_gateway --version
-
-      # Mirror of the Windows assertion: on a 64-bit host HSF_ENABLE_ZK must
-      # default OFF and the stub must be what got linked.
-      - name: Assert ZK disabled
+          python-version: '3.13'
+      - name: Detect affected components
+        id: paths
+        env:
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
         run: |
-          if ! ./build/hsf_gateway --version | grep -q 'ZK controller: disabled'; then
-            echo "Expected a ZK-disabled build on Linux x64" >&2
-            ./build/hsf_gateway --version >&2
-            exit 1
+          if [ -z "$BASE" ] || ! git cat-file -e "$BASE^{commit}" 2>/dev/null; then
+            echo 'build=true' >> "$GITHUB_OUTPUT"
+          else
+            python scripts/ci/changes.py "$BASE" HEAD
           fi
-
-      - name: Validate Lua scripts
-        run: ./scripts/validate-lua.sh
-
-      # The release and OTA-install scripts only ever run at release time or on
-      # a device being provisioned -- both of which are bad moments to discover
-      # a typo. A parse check costs nothing and moves that discovery here.
-      # Phase 1 of request/AdvanceUpdate.md, exercised black-box against a real
-      # gateway: authentication, RBAC, session revocation, injection and
-      # traversal, lockout, rate limiting, headers and the audit trail. These
-      # are properties of the whole request pipeline -- a unit test calling
-      # SecurityStore directly would still pass if the middleware stopped being
-      # installed at all.
-      - name: Security tests
-        run: ./scripts/security-test.sh ./build/hsf_gateway 18080
-
-      # Phase 2: compile -> encrypt -> sign -> verify -> load -> deploy -> run
-      # -> roll back, against a real three-module application. The group that
-      # earns its keep moves the source tree away and restarts: with the .lua
-      # files present, a package whose module names are wrong still "works",
-      # because require() falls through to package.path.
-      - name: Lua packaging tests
-        run: ./scripts/package-lua-test.sh ./build/hsf_gateway 18090
-
-      - name: Validate shell scripts
+      - name: Compile CI tooling and run release contract tests
         run: |
-          for f in scripts/*.sh; do
-            bash -n "$f" || { echo "::error file=$f::syntax error"; exit 1; }
-            echo "ok $f"
-          done
-
-      # Signing and verification agree on an exact byte sequence
-      # (<version>\n<platform>\n<sha256>\n) that lives in two files. Nothing
-      # else checks that they still match, and when they stop matching every
-      # package fails on the device AFTER a clean download -- so prove the
-      # round trip here, with a throwaway key.
-      - name: Update signing round-trip
+          python -m compileall -q scripts/ci
+          python -m unittest discover -s scripts/ci -p 'test_*.py' -v
+      - name: Validate shell and WebUI syntax
         run: |
-          openssl genpkey -algorithm ed25519 -out /tmp/ci-key.pem
-          openssl pkey -in /tmp/ci-key.pem -pubout -out /tmp/ci-pub.pem
-          mkdir -p /tmp/pkgs
-          echo "not a real package" > /tmp/pkgs/HSF-Gateway-v9.9.9-linux-x64.tar.gz
-          bash scripts/make-manifest.sh --version 9.9.9 --dir /tmp/pkgs \
-            --base-url https://example.invalid/9.9.9 --key /tmp/ci-key.pem
-
-          HASH=$(grep -o '"sha256": "[a-f0-9]*"' /tmp/pkgs/version.json | cut -d'"' -f4)
-          SIG=$(grep -o '"signature": "[^"]*"' /tmp/pkgs/version.json | cut -d'"' -f4)
-          [ -n "$SIG" ] || { echo "::error::manifest carries no signature"; exit 1; }
-
-          # Byte for byte what SignatureVerifier::BuildSignedMessage produces.
-          printf '%s\n%s\n%s\n' "9.9.9" "linux-x64" "$HASH" > /tmp/ci-msg.bin
-          printf '%s' "$SIG" | openssl base64 -d -A > /tmp/ci-sig.bin
-          openssl pkeyutl -verify -pubin -inkey /tmp/ci-pub.pem \
-            -rawin -in /tmp/ci-msg.bin -sigfile /tmp/ci-sig.bin
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: hsf_gateway-linux-x64
-          path: build/hsf_gateway
-
-  secrets-scan:
-    name: No credentials committed
-    runs-on: ubuntu-latest
+          git ls-files -z '*.sh' | xargs -0 -r -n1 bash -n
+          git ls-files -z 'web/*.js' 'web/**/*.js' | xargs -0 -r -n1 node --check
+  firmware-server:
+    name: Firmware Server (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, windows-2022]
     steps:
       - uses: actions/checkout@v4
-
-      # request/release.md section 4.2. Scoped to shipping code and config --
-      # request/ and docs/ legitimately discuss these words, and the config
-      # template legitimately contains the literal placeholders.
-      - name: Scan for secrets
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: pip
+          cache-dependency-path: tools/firmware_server/requirements.txt
+      - name: Install server dependencies
+        run: python -m pip install -r tools/firmware_server/requirements.txt
+      - name: Compile server and simulator
+        run: python -m compileall -q tools/firmware_server scripts/firmware_server_smoke.py
+      - name: Test firmware API and real HTTP lifecycle
+        run: python -m unittest tools.firmware_server.test_server -v
+  firmware:
+    needs: validate
+    if: needs.validate.outputs.build == 'true'
+    uses: ./.github/workflows/firmware-build.yml
+    with:
+      ref: ${{ github.sha }}
+  required:
+    name: Gateway CI required
+    if: always()
+    needs: [validate, firmware, firmware-server]
+    runs-on: ubuntu-22.04
+    steps:
+      - env:
+          VALIDATE: ${{ needs.validate.result }}
+          FIRMWARE: ${{ needs.firmware.result }}
+          SERVER: ${{ needs.firmware-server.result }}
         run: |
-          if git grep -nIE '(api[_-]?key|password|secret|token)["'"'"']?\s*[:=]\s*["'"'"'][A-Za-z0-9/+=_-]{16,}' \
-               -- src include web config CMakeLists.txt \
-               | grep -viE 'YOUR_|placeholder|example'; then
-            echo "::error::Possible committed credential -- see matches above" >&2
-            exit 1
-          fi
-          echo "No credential-shaped literals found."
-
-      - name: Assert runtime databases are ignored
-        run: |
-          # security.db is the sharpest of these: Argon2id password hashes and
-          # live session rows. It is covered by config/*.db in .gitignore, and
-          # named here so that stays true.
-          for f in config/config.db config/clients.db config/config.json config/security.db; do
-            if git ls-files --error-unmatch "$f" >/dev/null 2>&1; then
-              echo "::error::$f is tracked but holds credentials" >&2
-              exit 1
-            fi
-          done
-          echo "config databases are untracked."
+          test "$VALIDATE" = success
+          test "$SERVER" = success
+          test "$FIRMWARE" = success || test "$FIRMWARE" = skipped

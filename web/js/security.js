@@ -11,14 +11,8 @@
   var alertBox = document.getElementById("securityAlert");
 
   function notify(message, ok) {
-    alertBox.textContent = message;
-    alertBox.className = "alert " + (ok ? "alert-success" : "alert-danger");
+    alertBox.className = "d-none";
     if (window.HsfNotify) window.HsfNotify(message, ok);
-    if (ok) {
-      window.setTimeout(function () {
-        alertBox.className = "alert d-none";
-      }, 4000);
-    }
   }
 
   function setResult(id, message, ok) {

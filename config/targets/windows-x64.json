@@ -1,0 +1,10 @@
+{
+  "platform": "windows",
+  "architecture": "x64",
+  "zk": false,
+  "compiler": "MSVC",
+  "dependencies": "vcpkg-x64-windows",
+  "install_layout": "current/data",
+  "package_format": "zip",
+  "notes": "ZKTeco PullSDK is not available for this architecture."
+}

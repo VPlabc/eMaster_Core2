@@ -1,0 +1,18 @@
+[package]
+name = "emaster-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+emaster-config = { path = "../emaster-config" }
+emaster-event = { path = "../emaster-event" }
+emaster-plugin = { path = "../emaster-plugin" }
+emaster-runtime = { path = "../emaster-runtime" }
+
+[dev-dependencies]
+emaster-http = { path = "../emaster-http" }
+emaster-lua = { path = "../emaster-lua" }
+emaster-modbus = { path = "../emaster-modbus" }
+emaster-rabbitmq = { path = "../emaster-rabbitmq" }
+emaster-serial = { path = "../emaster-serial" }

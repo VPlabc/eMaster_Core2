@@ -1,0 +1,11 @@
+[package]
+name = "emaster-mqtt"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[features]
+production-transport = ["dep:rumqttc"]
+
+[dependencies]
+rumqttc = { version = "0.25.1", optional = true }

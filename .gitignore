@@ -51,11 +51,13 @@ config/scripts/smartlocker/data/*.json.tmp
 config/scripts/
 config/script_Tests/
 request/
-
+docs/
 # Ubuntu build via scripts/build-ubuntu.sh (its own vcpkg checkout and cache)
 .vcpkg/
 .vcpkg-cache/
 build-ubuntu/
+build-presets/
+release/
 
 # Generated secrets. lua_package.key is the XChaCha20-Poly1305 key that Lua
 # bundles are encrypted with and the Ed25519 signing key material lives beside
@@ -69,3 +71,7 @@ config/lua_signing.key
 config/security.db
 config/security.db-shm
 config/security.db-wal
+config/smartlocker.db
+config/smartlocker.db-shm
+config/smartlocker.db-wal
+target/

@@ -59,6 +59,7 @@ struct SerialConfig {
 };
 
 struct ModbusConfig {
+  bool enabled = true;
   std::string ip = "192.168.1.10";
   int port = 502;
   int input_coil_start = 0;
@@ -67,6 +68,23 @@ struct ModbusConfig {
   int output_coil_count = 4;
   int holding_register_start = 0;
   int holding_register_count = 16;
+  bool slave_enabled = false;
+  std::string slave_bind = "0.0.0.0";
+  int slave_port = 1502;
+  int slave_unit_id = 1;
+  int discrete_input_start = 0;
+  int discrete_input_count = 16;
+  int input_register_start = 0;
+  int input_register_count = 16;
+  std::string rtu_port;
+  bool rtu_master_enabled = false;
+  int rtu_baudrate = 115200;
+  int rtu_data_bits = 8;
+  int rtu_stop_bits = 1;
+  char rtu_parity = 'N';
+  int rtu_unit_id = 1;
+  bool rtu_slave_enabled = false;
+  int rtu_slave_id = 1;
   int poll_interval_ms = 500;
 };
 
@@ -100,10 +118,11 @@ struct RfidConfig {
 // tcp_json reader, say) at a different address. Folding the two together would
 // mean one address field for two boxes.
 //
-// Nothing in C++ reads these — ZkController takes its parameters from the
-// script's own zk.connect() call. They live here so that call can be
-// Config.Get("zk.ip") instead of an address edited into a Lua file per site.
+// ZkController reads the enabled/backend controls; connection parameters still
+// come from the script's own zk.connect() call. They live here so that call can
+// use Config.Get("zk.ip") instead of an address edited into a Lua file per site.
 struct ZkConfig {
+  bool enabled = true;
   std::string ip = "10.0.0.237";
   int port = 4370;
   int timeout_ms = 2000;

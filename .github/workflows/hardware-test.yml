@@ -1,0 +1,99 @@
+name: Firmware hardware smoke
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to verify on the boards
+        required: true
+      run_id:
+        description: Successful release workflow run ID containing the artifacts
+        required: true
+permissions:
+  contents: read
+  actions: read
+jobs:
+  validate:
+    runs-on: ubuntu-22.04
+    outputs:
+      commit: ${{ steps.guard.outputs.commit }}
+      version: ${{ steps.guard.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: refs/tags/${{ inputs.tag }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Validate source workflow
+        env:
+          RUN_ID: ${{ inputs.run_id }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          [[ "$RUN_ID" =~ ^[0-9]+$ ]]
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID" > run.json
+          jq -e '.path == ".github/workflows/release.yml" and .conclusion == "success" and (.event == "push" or .event == "workflow_dispatch")' run.json
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - id: guard
+        env:
+          TAG: ${{ inputs.tag }}
+        run: python scripts/ci/release.py guard "$TAG"
+      - uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.run_id }}
+          pattern: package-*
+          merge-multiple: true
+          path: artifacts
+      - name: Verify downloaded provenance before scheduling hardware
+        env:
+          VERSION: ${{ steps.guard.outputs.version }}
+          COMMIT: ${{ steps.guard.outputs.commit }}
+        run: python scripts/ci/release.py verify artifacts --version "$VERSION" --commit "$COMMIT" --expected windows-x86,windows-x64,windows-arm64,linux-x64,linux-arm64,linux-armhf
+  smoke:
+    needs: validate
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [linux-arm64, linux-armhf, windows-arm64]
+    runs-on: [self-hosted, '${{ matrix.target }}']
+    timeout-minutes: 15
+    concurrency:
+      group: firmware-board-${{ matrix.target }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.validate.outputs.commit }}
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.run_id }}
+          name: package-${{ matrix.target }}
+          path: artifacts
+      - name: Verify, extract and smoke test the package
+        shell: python {0}
+        env:
+          VERSION: ${{ needs.validate.outputs.version }}
+          COMMIT: ${{ needs.validate.outputs.commit }}
+          TARGET: ${{ matrix.target }}
+        run: |
+          import os, sys, tarfile, tempfile, zipfile
+          from pathlib import Path
+          sys.path.insert(0, str(Path('scripts/ci').resolve()))
+          import release, smoke
+          directory = Path('artifacts')
+          release.verify(directory, os.environ['VERSION'], os.environ['COMMIT'], os.environ['TARGET'])
+          archives = [p for p in directory.iterdir() if p.name.endswith(('.zip', '.tar.gz'))]
+          assert len(archives) == 1, 'Expected one archive'
+          with tempfile.TemporaryDirectory(prefix='firmware-board-') as stage:
+              if archives[0].suffix == '.zip':
+                  with zipfile.ZipFile(archives[0]) as archive:
+                      archive.extractall(stage)
+              else:
+                  with tarfile.open(archives[0]) as archive:
+                      archive.extractall(stage, filter='data')
+              roots = list(Path(stage).iterdir())
+              assert len(roots) == 1 and roots[0].is_dir(), 'Unexpected package layout'
+              smoke.smoke(roots[0], os.environ['TARGET'], 18180)

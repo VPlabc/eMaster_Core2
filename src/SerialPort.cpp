@@ -37,18 +37,26 @@ bool SerialPort::SameOpenConfig(const SerialConfig& config) const {
 void SerialPort::SetAutoReopen(bool enable) { autoReopen_.store(enable); }
 
 void SerialPort::StartWorker() {
-  if (readThread_.joinable()) return;
   stopRequested_.store(false);
-  readThread_ = std::thread(&SerialPort::ReadLoop, this);
+  writeStopRequested_.store(false);
+  if (!readThread_.joinable()) readThread_ = std::thread(&SerialPort::ReadLoop, this);
+  if (!writeThread_.joinable()) writeThread_ = std::thread(&SerialPort::WriteLoop, this);
 }
 
 void SerialPort::StopWorker() {
   stopRequested_.store(true);
+  writeStopRequested_.store(true);
+  {
+    std::lock_guard<std::mutex> lock(writeQueueMutex_);
+    writeQueue_.clear();
+  }
+  writeQueueCv_.notify_all();
   // Cancel the in-flight read first: otherwise the join waits for the worker to
   // time out of a blocking read that has no reason to finish (an idle port
   // produces nothing), which is dead time in whatever asked to close.
   PlatformCancelIo();
   if (readThread_.joinable()) readThread_.join();
+  if (writeThread_.joinable()) writeThread_.join();
 }
 
 bool SerialPort::Open(const SerialConfig& config) {
@@ -112,9 +120,54 @@ void SerialPort::Close() {
 
 bool SerialPort::IsOpen() const { return open_.load(); }
 
-bool SerialPort::Write(const std::string& text) {
+bool SerialPort::QueueWrite(const std::string& text, bool replacePending) {
   if (!open_.load()) return false;
-  return PlatformWrite(text);
+
+  std::lock_guard<std::mutex> lock(writeQueueMutex_);
+  if (!open_.load()) return false;
+  if (replacePending) writeQueue_.clear();
+  writeQueue_.push_back(text);
+  writeQueueCv_.notify_one();
+  return true;
+}
+
+bool SerialPort::Write(const std::string& text) { return QueueWrite(text, false); }
+
+bool SerialPort::WriteLatest(const std::string& text) { return QueueWrite(text, true); }
+
+void SerialPort::WriteLoop() {
+  while (true) {
+    std::string text;
+    {
+      std::unique_lock<std::mutex> lock(writeQueueMutex_);
+      writeQueueCv_.wait(lock, [this] { return writeStopRequested_.load() || !writeQueue_.empty(); });
+      if (writeStopRequested_.load() && writeQueue_.empty()) return;
+      text = std::move(writeQueue_.front());
+      writeQueue_.pop_front();
+    }
+
+    if (!open_.load()) continue;
+
+    const auto start = std::chrono::steady_clock::now();
+    const bool ok = PlatformWrite(text);
+  const auto elapsedMs =
+      std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start).count();
+
+    // A normal 40-byte LED frame at 9600 baud takes roughly 42 ms on the wire.
+    // This only records abnormal transport stalls, which makes a bad USB adapter
+    // or an incorrect Serial2 setting visible without flooding the runtime log.
+    if (elapsedMs > 100) {
+      Logger::Instance().Warning(LogCategory::Serial,
+                                 "Slow serial write on " + openConfig_.port + ": " +
+                                     std::to_string(text.size()) + " bytes in " +
+                                     std::to_string(elapsedMs) + " ms");
+    }
+    if (!ok) {
+      Logger::Instance().Warning(LogCategory::Serial,
+                                 "Serial write failed on " + openConfig_.port + " (" +
+                                     std::to_string(text.size()) + " bytes)");
+    }
+  }
 }
 
 void SerialPort::SetDataCallback(DataCallback callback) {

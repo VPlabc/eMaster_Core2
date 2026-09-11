@@ -111,6 +111,10 @@ bool SerialPort::PlatformOpen(const SerialConfig& config) {
     PurgeComm(handle, PURGE_RXCLEAR | PURGE_TXCLEAR | PURGE_RXABORT | PURGE_TXABORT);
   }
 
+  // Reserve independent driver buffers for this handle. Serial and Serial2
+  // each construct a separate SerialPort, so neither port shares this queue.
+  SetupComm(handle, 4096, 4096);
+
   COMMTIMEOUTS timeouts{};
   // Read: the worker blocks here, so this is also how long a Close() can be
   // delayed if a driver ignores CancelIoEx.
@@ -125,13 +129,15 @@ bool SerialPort::PlatformOpen(const SerialConfig& config) {
   timeouts.ReadIntervalTimeout = 50;
   timeouts.ReadTotalTimeoutConstant = 100;
   timeouts.ReadTotalTimeoutMultiplier = 0;
-  // Write: a bound, not a budget. With flow control off the driver takes the
-  // bytes immediately, so this only caps a genuinely stuck port. The multiplier
-  // is per byte actually being sent here, so a small one is harmless -- 2ms/byte
-  // covers 9600 baud (~1ms/byte) with margin.
-  timeouts.WriteTotalTimeoutConstant = 200;
+  // Write: a bound, not a budget. 9600 baud needs about 1.04 ms per byte, so
+  // 25 ms plus 2 ms/byte comfortably sends an LED frame while avoiding the old
+  // 200 ms fixed delay when a USB serial driver stalls.
+  timeouts.WriteTotalTimeoutConstant = 25;
   timeouts.WriteTotalTimeoutMultiplier = 2;
-  SetCommTimeouts(handle, &timeouts);
+  if (!SetCommTimeouts(handle, &timeouts)) {
+    CloseHandle(handle);
+    return false;
+  }
 
   handle_ = handle;
   return true;
@@ -159,10 +165,17 @@ int SerialPort::PlatformRead(char* buffer, size_t bufferSize) {
 
 bool SerialPort::PlatformWrite(const std::string& text) {
   if (!handle_) return false;
-  DWORD bytesWritten = 0;
-  BOOL ok = WriteFile(static_cast<HANDLE>(handle_), text.data(), static_cast<DWORD>(text.size()), &bytesWritten,
-                       nullptr);
-  return ok && bytesWritten == text.size();
+  size_t offset = 0;
+  while (offset < text.size()) {
+    DWORD bytesWritten = 0;
+    const DWORD remaining = static_cast<DWORD>(text.size() - offset);
+    if (!WriteFile(static_cast<HANDLE>(handle_), text.data() + offset, remaining, &bytesWritten, nullptr) ||
+        bytesWritten == 0) {
+      return false;
+    }
+    offset += bytesWritten;
+  }
+  return true;
 }
 
 }  // namespace hsf

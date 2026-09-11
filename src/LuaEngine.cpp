@@ -9,6 +9,7 @@ extern "C" {
 
 #include <cctype>
 #include <chrono>
+#include <algorithm>
 #include <filesystem>
 #include <fstream>
 #include <limits>
@@ -28,6 +29,7 @@ extern "C" {
 #include "hsf/CardCache.h"
 #include "hsf/CitizenIdParser.h"
 #include "hsf/ConfigManager.h"
+#include "hsf/DynamicConfigManager.h"
 #include "hsf/LogStore.h"
 #include "hsf/Logger.h"
 #include "hsf/ModbusClient.h"
@@ -204,6 +206,22 @@ void LuaEngine::Bind(RestClient* rest, SerialPort* serial, SerialPort* serial2, 
   // owns those slots and fans each event out to every live engine.
 }
 
+void LuaEngine::Bind(ServiceRegistry* services) {
+  if (!services) {
+    Bind(nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr);
+    return;
+  }
+
+  Bind(services->Get<RestClient>(ServiceNames::kRest),
+       services->Get<SerialPort>(ServiceNames::kSerial),
+       services->Get<SerialPort>(ServiceNames::kSerial2),
+       services->Get<ModbusClient>(ServiceNames::kModbus),
+       services->Get<RfidClient>(ServiceNames::kRfid),
+       services->Get<ZkController>(ServiceNames::kZk),
+       services->Get<MqClient>(ServiceNames::kMq),
+       services->Get<PluginManager>(ServiceNames::kPlugins));
+}
+
 std::string LuaEngine::RuntimeName() const {
   std::lock_guard<std::mutex> lock(runtimeMutex_);
   return runtimeName_;
@@ -345,7 +363,20 @@ void LuaEngine::RegisterBindings() {
   RegisterFunction(L_, "Set", Lua_Config_Set);
   RegisterFunction(L_, "Exists", Lua_Config_Exists);
   RegisterFunction(L_, "GetCategory", Lua_Config_GetCategory);
+  RegisterFunction(L_, "RegisterSchema", Lua_DynamicConfig_RegisterSchema);
   lua_setglobal(L_, "Config");
+
+  // Project-scoped configuration API. The lowercase table is intentionally
+  // separate from the legacy gateway-wide Config.Get/Set API.
+  lua_newtable(L_);
+  RegisterFunction(L_, "register_schema", Lua_DynamicConfig_RegisterSchema);
+  RegisterFunction(L_, "extend", Lua_DynamicConfig_Extend);
+  RegisterFunction(L_, "get", Lua_DynamicConfig_Get);
+  RegisterFunction(L_, "set", Lua_DynamicConfig_Set);
+  RegisterFunction(L_, "get_all", Lua_DynamicConfig_GetAll);
+  RegisterFunction(L_, "set_all", Lua_DynamicConfig_SetAll);
+  RegisterFunction(L_, "get_schema", Lua_DynamicConfig_GetSchema);
+  lua_setglobal(L_, "config");
 
   // SQL over this script's own SQLite connection. This IS a raw SQL surface,
   // unlike Config.* above -- SmartLockerPlan.md section 15 asks for the
@@ -1820,7 +1851,9 @@ int LuaEngine::Lua_Serial2_Write(lua_State* L) {
   // (they start with 0x00 CMD and end with 0x0D), so a null-terminated read
   // would send nothing at all.
   const char* data = luaL_checklstring(L, 1, &len);
-  bool ok = engine && engine->serial2_ && engine->serial2_->Write(std::string(data, len));
+  // The LED is status-only: a new status supersedes any unsent old one. Queue
+  // it on Serial2's own worker so a stuck COM driver never freezes Lua.
+  bool ok = engine && engine->serial2_ && engine->serial2_->WriteLatest(std::string(data, len));
   lua_pushboolean(L, ok ? 1 : 0);
   return 1;
 }
@@ -3000,6 +3033,59 @@ void PushConfigValue(lua_State* L, const nlohmann::json& value) {
   }
 }
 
+nlohmann::json LuaValueToJson(lua_State* L, int index) {
+  index = lua_absindex(L, index);
+  switch (lua_type(L, index)) {
+    case LUA_TNIL: return nullptr;
+    case LUA_TBOOLEAN: return static_cast<bool>(lua_toboolean(L, index));
+    case LUA_TNUMBER: return lua_isinteger(L, index) ? nlohmann::json(static_cast<int64_t>(lua_tointeger(L, index)))
+                                                       : nlohmann::json(lua_tonumber(L, index));
+    case LUA_TSTRING: return std::string(lua_tostring(L, index));
+    case LUA_TTABLE: {
+      bool array = true;
+      lua_Integer max = 0;
+      lua_pushnil(L);
+      while (lua_next(L, index) != 0) {
+        if (!lua_isinteger(L, -2) || lua_tointeger(L, -2) < 1) array = false;
+        else max = std::max(max, lua_tointeger(L, -2));
+        lua_pop(L, 1);
+      }
+      if (array) {
+        for (lua_Integer i = 1; i <= max; ++i) {
+          lua_geti(L, index, i);
+          if (lua_isnil(L, -1)) { array = false; lua_pop(L, 1); break; }
+          lua_pop(L, 1);
+        }
+      }
+      nlohmann::json result = array ? nlohmann::json::array() : nlohmann::json::object();
+      if (array) {
+        for (lua_Integer i = 1; i <= max; ++i) {
+          lua_geti(L, index, i);
+          result.push_back(LuaValueToJson(L, -1));
+          lua_pop(L, 1);
+        }
+      } else {
+        lua_pushnil(L);
+        while (lua_next(L, index) != 0) {
+          if (lua_isstring(L, -2)) result[lua_tostring(L, -2)] = LuaValueToJson(L, -1);
+          lua_pop(L, 1);
+        }
+      }
+      return result;
+    }
+    default: return nullptr;
+  }
+}
+
+std::string DynamicProjectId(LuaEngine* engine) {
+  if (!engine) return "default";
+  const std::string name = engine->RuntimeName();
+  if (name.empty()) return "default";
+  std::filesystem::path path(name);
+  if (path.has_parent_path()) return path.parent_path().generic_string();
+  return path.stem().string();
+}
+
 }  // namespace
 
 // Config.Get("modbus.ip") -> value | nil
@@ -3076,6 +3162,78 @@ int LuaEngine::Lua_Config_GetCategory(lua_State* L) {
   }
   PushConfigValue(L, section);
   return 1;
+}
+
+int LuaEngine::Lua_DynamicConfig_RegisterSchema(lua_State* L) {
+  LuaEngine* engine = GetEngine(L);
+  int schemaIndex = 1;
+  std::string project = DynamicProjectId(engine);
+  if (lua_isstring(L, 1) && lua_istable(L, 2)) {
+    project = lua_tostring(L, 1);
+    schemaIndex = 2;
+  }
+  if (!lua_istable(L, schemaIndex)) return luaL_error(L, "config.register_schema expects a table");
+  std::string error;
+  bool ok = DynamicConfigManager::Instance().RegisterSchema(project, LuaValueToJson(L, schemaIndex), error);
+  lua_pushboolean(L, ok ? 1 : 0);
+  if (!ok) { lua_pushstring(L, error.c_str()); return 2; }
+  return 1;
+}
+
+int LuaEngine::Lua_DynamicConfig_Extend(lua_State* L) {
+  if (!lua_istable(L, 1) || lua_gettop(L) < 2)
+    return luaL_error(L, "config.extend expects a schema and at least one fragment");
+  nlohmann::json schema = LuaValueToJson(L, 1);
+  if (!schema.is_object()) return luaL_error(L, "config.extend schema must be an object");
+  if (!schema.contains("groups") || !schema["groups"].is_array()) schema["groups"] = nlohmann::json::array();
+  for (int i = 2; i <= lua_gettop(L); ++i) {
+    if (!lua_istable(L, i)) return luaL_error(L, "config.extend fragments must be tables");
+    nlohmann::json fragment = LuaValueToJson(L, i);
+    if (!fragment.is_object()) return luaL_error(L, "config.extend fragment must be an object");
+    if (fragment.contains("groups") && fragment["groups"].is_array())
+      for (const auto& group : fragment["groups"]) schema["groups"].push_back(group);
+    else if (fragment.contains("fields") && fragment["fields"].is_array())
+      for (const auto& field : fragment["fields"]) schema["fields"].push_back(field);
+    else schema["groups"].push_back(fragment);
+  }
+  PushConfigValue(L, schema);
+  return 1;
+}
+
+int LuaEngine::Lua_DynamicConfig_Get(lua_State* L) {
+  const char* key = luaL_checkstring(L, 1);
+  const auto project = DynamicProjectId(GetEngine(L));
+  const auto values = DynamicConfigManager::Instance().Values(project, false);
+  auto it = values.find(key);
+  if (it == values.end()) { lua_pushnil(L); return 1; }
+  PushConfigValue(L, *it); return 1;
+}
+
+int LuaEngine::Lua_DynamicConfig_Set(lua_State* L) {
+  const char* key = luaL_checkstring(L, 1);
+  std::string error;
+  nlohmann::json errors;
+  bool ok = DynamicConfigManager::Instance().SetValue(DynamicProjectId(GetEngine(L)), key, LuaValueToJson(L, 2), errors);
+  lua_pushboolean(L, ok ? 1 : 0);
+  if (!ok) { error = errors.dump(); lua_pushstring(L, error.c_str()); return 2; }
+  return 1;
+}
+
+int LuaEngine::Lua_DynamicConfig_GetAll(lua_State* L) {
+  PushConfigValue(L, DynamicConfigManager::Instance().Values(DynamicProjectId(GetEngine(L)), false)); return 1;
+}
+
+int LuaEngine::Lua_DynamicConfig_SetAll(lua_State* L) {
+  if (!lua_istable(L, 1)) return luaL_error(L, "config.set_all expects a table");
+  nlohmann::json errors;
+  bool ok = DynamicConfigManager::Instance().SetValues(DynamicProjectId(GetEngine(L)), LuaValueToJson(L, 1), errors);
+  lua_pushboolean(L, ok ? 1 : 0);
+  if (!ok) { lua_pushstring(L, errors.dump().c_str()); return 2; }
+  return 1;
+}
+
+int LuaEngine::Lua_DynamicConfig_GetSchema(lua_State* L) {
+  PushConfigValue(L, DynamicConfigManager::Instance().Schema(DynamicProjectId(GetEngine(L)))); return 1;
 }
 
 // --- Db.* (SQLite) ---------------------------------------------------------

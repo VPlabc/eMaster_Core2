@@ -1,0 +1,33 @@
+name: Broker integration validation
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'crates/emaster-mqtt/**'
+      - 'crates/emaster-rabbitmq/**'
+      - '.github/workflows/broker-integration.yml'
+
+jobs:
+  brokers:
+    runs-on: ubuntu-latest
+    services:
+      mqtt:
+        image: eclipse-mosquitto:2
+        ports:
+          - 1883:1883
+      rabbitmq:
+        image: rabbitmq:3-management
+        ports:
+          - 5672:5672
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Run MQTT integration test
+        env:
+          EMASTER_MQTT_HOST: localhost
+        run: cargo test -p emaster-mqtt --features production-transport --test production_transport -- --ignored
+      - name: Run RabbitMQ integration test
+        env:
+          EMASTER_AMQP_HOST: localhost
+        run: cargo test -p emaster-rabbitmq --features production-transport --test production_transport -- --ignored

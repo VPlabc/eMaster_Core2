@@ -1,0 +1,20 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/emaster-config",
+    "crates/emaster-event",
+    "crates/emaster-core",
+    "crates/emaster-runtime",
+    "crates/emaster-plugin",
+    "crates/emaster-modbus",
+    "crates/emaster-serial",
+    "crates/emaster-http",
+    "crates/emaster-mqtt",
+    "crates/emaster-rabbitmq",
+    "crates/emaster-lua",
+]
+
+[workspace.package]
+edition = "2021"
+version = "0.1.0"
+license = "MIT"

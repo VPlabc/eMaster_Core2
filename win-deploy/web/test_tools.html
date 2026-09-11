@@ -1,0 +1,984 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>eMaster Gateway - Tools</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="css/app.css" rel="stylesheet">
+  <!-- Must run before first paint so the stored theme is already on <html>;
+       loading it with the scripts at the end of <body> flashes light-then-dark. -->
+  <script src="js/theme.js"></script>
+  <!-- Gates the page: redirects to /login.html when there is no session, and
+       enforces any hsf-require-role meta above. Must precede layout.js. -->
+  <script src="js/auth.js"></script>
+</head>
+<body>
+  <div id="hsfNav"></div>
+
+  <div class="container-fluid py-4 hsf-tools">
+    <div class="row g-3">
+      <!-- Vertical tab rail: seven tools is too many for a horizontal strip
+           at tablet widths, and each panel is tall enough that side-by-side
+           navigation stays visible while scrolling a result. -->
+      <div class="col-12 col-lg-3 col-xl-2">
+        <div class="nav flex-column nav-pills hsf-tool-rail" id="toolTabs" role="tablist">
+          <button class="nav-link active" data-bs-toggle="pill" data-bs-target="#tool-rest-client" type="button">
+            REST API Client
+          </button>
+          <button class="nav-link" data-bs-toggle="pill" data-bs-target="#tool-rest-server" type="button">
+            REST API Server
+          </button>
+          <button class="nav-link" data-bs-toggle="pill" data-bs-target="#tool-modbus-client" type="button">
+            Modbus TCP Client
+          </button>
+          <button class="nav-link" data-bs-toggle="pill" data-bs-target="#tool-modbus-server" type="button">
+            Modbus TCP Server
+          </button>
+          <button class="nav-link" data-bs-toggle="pill" data-bs-target="#tool-serial-master" type="button">
+            Serial Master
+          </button>
+          <button class="nav-link" data-bs-toggle="pill" data-bs-target="#tool-serial-slave" type="button">
+            Serial Slave
+          </button>
+          <button class="nav-link" data-bs-toggle="pill" data-bs-target="#tool-card-clients" type="button">
+            Card Clients
+          </button>
+
+          <!-- Hardware diagnostics (UpdateTestToolPlan.md sections 43-48).
+               Separated by a rule because these drive REAL relays on the live
+               controller session, not a throwaway probe like the panels
+               above. -->
+          <hr class="my-2">
+          <button class="nav-link" data-bs-toggle="pill" data-bs-target="#tool-zk" type="button">
+            ZK Controller
+          </button>
+          <button class="nav-link" data-bs-toggle="pill" data-bs-target="#tool-relay" type="button">
+            Relay &amp; Beeper
+          </button>
+          <button class="nav-link" data-bs-toggle="pill" data-bs-target="#tool-inputs" type="button">
+            Input Monitor
+          </button>
+          <button class="nav-link" data-bs-toggle="pill" data-bs-target="#tool-mq" type="button">
+            RabbitMQ
+          </button>
+          <button class="nav-link" data-bs-toggle="pill" data-bs-target="#tool-network" type="button">
+            Network Diagnostics
+          </button>
+          <button class="nav-link" data-bs-toggle="pill" data-bs-target="#tool-scenario" type="button">
+            SmartLocker Scenario
+          </button>
+          <button class="nav-link" data-bs-toggle="pill" data-bs-target="#tool-test-log" type="button">
+            Test Log
+          </button>
+        </div>
+      </div>
+
+      <div class="col-12 col-lg-9 col-xl-10">
+        <div class="tab-content">
+
+          <!-- ============ REST API Client ============ -->
+          <div class="tab-pane fade show active" id="tool-rest-client">
+            <div class="card">
+              <div class="card-header">REST API Client</div>
+              <div class="card-body">
+                <p class="text-muted small">Sends an arbitrary HTTP request from the gateway itself, not from
+                  your browser &mdash; so it reaches endpoints the browser cannot (private IPs, no CORS) and
+                  reports exactly what the gateway's own REST client would see.</p>
+
+                <div class="row g-2 align-items-end mb-3">
+                  <div class="col-auto">
+                    <label class="form-label mb-0">Method</label>
+                    <select id="rcMethod" class="form-select">
+                      <option>GET</option><option>POST</option><option>PUT</option>
+                      <option>PATCH</option><option>DELETE</option><option>HEAD</option>
+                    </select>
+                  </div>
+                  <div class="col">
+                    <label class="form-label mb-0">URL</label>
+                    <input id="rcUrl" class="form-control" placeholder="https://example.com/api/endpoint">
+                  </div>
+                  <div class="col-auto">
+                    <label class="form-label mb-0">Timeout (ms)</label>
+                    <input id="rcTimeout" type="number" class="form-control" value="5000" style="width: 8rem;">
+                  </div>
+                  <div class="col-auto">
+                    <button id="rcSend" class="btn btn-primary">Send</button>
+                  </div>
+                </div>
+
+                <div class="row g-3">
+                  <div class="col-12 col-xl-6">
+                    <label class="form-label mb-0">Headers <span class="text-muted small">(one per line, <code>Name: value</code>)</span></label>
+                    <textarea id="rcHeaders" class="form-control font-monospace" rows="4"
+                              placeholder="API-Key: your-key&#10;Content-Type: application/json"></textarea>
+                  </div>
+                  <div class="col-12 col-xl-6">
+                    <label class="form-label mb-0">Body</label>
+                    <div class="form-check form-check-inline small mb-1">
+                      <input class="form-check-input" type="radio" name="rcBodyMode" id="rcBodyRaw" value="raw" checked>
+                      <label class="form-check-label" for="rcBodyRaw">Raw</label>
+                    </div>
+                    <div class="form-check form-check-inline small mb-1">
+                      <input class="form-check-input" type="radio" name="rcBodyMode" id="rcBodyForm" value="form">
+                      <label class="form-check-label" for="rcBodyForm">multipart/form-data</label>
+                    </div>
+                    <textarea id="rcBody" class="form-control font-monospace" rows="4"
+                              placeholder='{"key": "value"}'></textarea>
+                    <div class="form-text" id="rcBodyHint">Sent verbatim. Set Content-Type in Headers.</div>
+                  </div>
+                </div>
+
+                <div class="form-check form-switch mt-2">
+                  <input class="form-check-input" type="checkbox" id="rcVerifySsl" checked>
+                  <label class="form-check-label small" for="rcVerifySsl">Verify SSL certificate</label>
+                </div>
+
+                <hr>
+                <div class="d-flex gap-3 align-items-center mb-2 flex-wrap">
+                  <strong>Response</strong>
+                  <span class="hsf-badge hsf-badge-idle" id="rcStatus">--</span>
+                  <span class="text-muted small" id="rcElapsed"></span>
+                </div>
+                <ul class="nav nav-tabs" role="tablist">
+                  <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab"
+                      data-bs-target="#rcPaneBody" type="button">Body</button></li>
+                  <li class="nav-item"><button class="nav-link" data-bs-toggle="tab"
+                      data-bs-target="#rcPaneHeaders" type="button">Headers</button></li>
+                </ul>
+                <div class="tab-content border border-top-0 rounded-bottom">
+                  <div class="tab-pane fade show active" id="rcPaneBody">
+                    <pre class="hsf-tool-output mb-0" id="rcResponseBody"></pre>
+                  </div>
+                  <div class="tab-pane fade" id="rcPaneHeaders">
+                    <pre class="hsf-tool-output mb-0" id="rcResponseHeaders"></pre>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- ============ REST API Server ============ -->
+          <div class="tab-pane fade" id="tool-rest-server">
+            <div class="card">
+              <div class="card-header">REST API Server</div>
+              <div class="card-body">
+                <p class="text-muted small">The endpoints this gateway serves. <strong>Try</strong> fires the
+                  request against this gateway and shows the result &mdash; read-only endpoints only; the ones
+                  that change state are listed for reference but not fired from here.</p>
+                <div class="table-responsive">
+                  <table class="table table-sm table-striped align-middle" id="serverRoutesTable">
+                    <thead><tr><th>Method</th><th>Path</th><th>Description</th><th></th></tr></thead>
+                    <tbody></tbody>
+                  </table>
+                </div>
+                <p class="mb-1"><strong>Result</strong> <span class="hsf-badge hsf-badge-idle" id="rsStatus">--</span></p>
+                <pre class="hsf-tool-output mb-0" id="rsOutput"></pre>
+              </div>
+            </div>
+          </div>
+
+          <!-- ============ Modbus TCP Client ============ -->
+          <div class="tab-pane fade" id="tool-modbus-client">
+            <div class="card">
+              <div class="card-header">Modbus TCP Client</div>
+              <div class="card-body">
+                <p class="text-muted small">One-shot reads and writes against any Modbus TCP device. Each
+                  request opens and closes its own connection, so it never disturbs the gateway's live PLC link.
+                  <strong>Coils (FC01) and discrete inputs (FC02) are separate address spaces</strong> &mdash; a
+                  PLC that answers one may return an exception for the same address on the other.</p>
+
+                <div class="row g-2 align-items-end mb-3">
+                  <div class="col-auto">
+                    <label class="form-label mb-0">IP</label>
+                    <input id="mbIp" class="form-control" style="width: 12rem;" placeholder="192.168.1.10">
+                  </div>
+                  <div class="col-auto">
+                    <label class="form-label mb-0">Port</label>
+                    <input id="mbPort" type="number" class="form-control" value="502" style="width: 7rem;">
+                  </div>
+                  <div class="col-auto">
+                    <label class="form-label mb-0">Operation</label>
+                    <select id="mbOp" class="form-select">
+                      <option value="read_coils">Read Coils (FC01)</option>
+                      <option value="read_discrete_inputs">Read Discrete Inputs (FC02)</option>
+                      <option value="read_holding">Read Holding Registers (FC03)</option>
+                      <option value="write_coil">Write Coil (FC05)</option>
+                      <option value="write_holding">Write Holding Register (FC06)</option>
+                      <option value="connect">Connect only</option>
+                    </select>
+                  </div>
+                  <div class="col-auto">
+                    <label class="form-label mb-0">Address</label>
+                    <input id="mbAddress" type="number" class="form-control" value="0" style="width: 8rem;">
+                  </div>
+                  <div class="col-auto" id="mbCountWrap">
+                    <label class="form-label mb-0">Count</label>
+                    <input id="mbCount" type="number" class="form-control" value="8" min="1" style="width: 7rem;">
+                  </div>
+                  <div class="col-auto d-none" id="mbValueWrap">
+                    <label class="form-label mb-0">Value</label>
+                    <select id="mbBoolValue" class="form-select" style="width: 7rem;">
+                      <option value="true">ON</option><option value="false">OFF</option>
+                    </select>
+                    <input id="mbNumValue" type="number" class="form-control d-none" value="0"
+                           min="0" max="65535" style="width: 7rem;">
+                  </div>
+                  <div class="col-auto">
+                    <button id="mbSend" class="btn btn-primary">Execute</button>
+                  </div>
+                </div>
+
+                <div class="d-flex gap-2 mb-3 flex-wrap">
+                  <button id="mbScan" class="btn btn-sm btn-outline-secondary">Scan common base addresses</button>
+                  <span class="text-muted small align-self-center">Probes 0, 1, 100, 1000, 1024, 2048, 4096, 8192,
+                    10000, 10001 with both FC01 and FC02 to find which your PLC accepts.</span>
+                </div>
+
+                <p class="mb-1"><strong>Result</strong> <span class="hsf-badge hsf-badge-idle" id="mbStatus">--</span></p>
+                <div id="mbBits" class="d-flex flex-wrap gap-2 mb-2"></div>
+                <pre class="hsf-tool-output mb-0" id="mbOutput"></pre>
+              </div>
+            </div>
+          </div>
+
+          <!-- ============ Modbus TCP Server ============ -->
+          <div class="tab-pane fade" id="tool-modbus-server">
+            <div class="card">
+              <div class="card-header">Modbus TCP Server</div>
+              <div class="card-body" id="modbusServerBody"></div>
+            </div>
+          </div>
+
+          <!-- ============ Serial Master ============ -->
+          <div class="tab-pane fade" id="tool-serial-master">
+            <div class="card">
+              <div class="card-header">Serial Master</div>
+              <div class="card-body">
+                <p class="text-muted small">Opens a port, writes a frame, and reports whatever arrives back
+                  within the read window. The port is opened only for the duration of the request. Pointing this
+                  at a port the gateway already holds (Serial1 / Serial2) will fail to open &mdash; that is
+                  expected, not a fault.</p>
+
+                <div class="row g-2 align-items-end mb-3">
+                  <div class="col-auto">
+                    <label class="form-label mb-0">Port</label>
+                    <div class="input-group">
+                      <input id="smPort" class="form-control" list="smPortList" style="width: 10rem;"
+                             placeholder="COM3">
+                      <button id="smScan" class="btn btn-outline-secondary" type="button">Scan</button>
+                    </div>
+                    <datalist id="smPortList"></datalist>
+                  </div>
+                  <div class="col-auto">
+                    <label class="form-label mb-0">Baud</label>
+                    <input id="smBaud" type="number" class="form-control" value="9600" style="width: 8rem;">
+                  </div>
+                  <div class="col-auto">
+                    <label class="form-label mb-0">Data</label>
+                    <select id="smDataBits" class="form-select" style="width: 5.5rem;">
+                      <option>8</option><option>7</option>
+                    </select>
+                  </div>
+                  <div class="col-auto">
+                    <label class="form-label mb-0">Parity</label>
+                    <select id="smParity" class="form-select" style="width: 6rem;">
+                      <option value="N">None</option><option value="E">Even</option><option value="O">Odd</option>
+                    </select>
+                  </div>
+                  <div class="col-auto">
+                    <label class="form-label mb-0">Stop</label>
+                    <select id="smStopBits" class="form-select" style="width: 5.5rem;">
+                      <option>1</option><option>2</option>
+                    </select>
+                  </div>
+                  <div class="col-auto">
+                    <label class="form-label mb-0">Read window (ms)</label>
+                    <input id="smReadMs" type="number" class="form-control" value="500" max="5000"
+                           style="width: 8rem;">
+                  </div>
+                </div>
+
+                <div class="row g-2 align-items-end mb-3">
+                  <div class="col">
+                    <label class="form-label mb-0">Data to send</label>
+                    <input id="smData" class="form-control font-monospace" placeholder="Hello device">
+                  </div>
+                  <div class="col-auto">
+                    <div class="form-check form-switch mb-2">
+                      <input class="form-check-input" type="checkbox" id="smHex">
+                      <label class="form-check-label small" for="smHex">Hex</label>
+                    </div>
+                    <div class="form-check form-switch mb-0">
+                      <input class="form-check-input" type="checkbox" id="smAppendCr">
+                      <label class="form-check-label small" for="smAppendCr">Append CR</label>
+                    </div>
+                  </div>
+                  <div class="col-auto">
+                    <button id="smSend" class="btn btn-primary">Send</button>
+                  </div>
+                </div>
+
+                <p class="mb-1"><strong>Result</strong> <span class="hsf-badge hsf-badge-idle" id="smStatus">--</span></p>
+                <pre class="hsf-tool-output mb-0" id="smOutput"></pre>
+              </div>
+            </div>
+          </div>
+
+          <!-- ============ Serial Slave ============ -->
+          <div class="tab-pane fade" id="tool-serial-slave">
+            <div class="card">
+              <div class="card-header">Serial Slave</div>
+              <div class="card-body" id="serialSlaveBody"></div>
+            </div>
+          </div>
+
+          <!-- ============ Card Clients ============ -->
+          <div class="tab-pane fade" id="tool-card-clients">
+            <p class="text-muted small">
+              Manages external card reader clients that submit card UIDs to <code>POST /api/card/input</code>
+              instead of talking to RFID hardware wired directly to this gateway (see
+              <a href="/lua_docs.html">Card Lua API</a>).
+            </p>
+
+            <div class="card mb-4">
+              <div class="card-header d-flex justify-content-between align-items-center">
+                <span>Clients</span>
+                <button id="btnRefreshClients" class="btn btn-sm btn-outline-secondary">Refresh</button>
+              </div>
+              <div class="card-body">
+                <form id="createClientForm" class="row g-2 mb-3 align-items-end">
+                  <div class="col-auto">
+                    <label class="form-label mb-0">Client Name</label>
+                    <input id="newClientName" class="form-control" placeholder="e.g. Turnstile Reader 1" required>
+                  </div>
+                  <div class="col-auto">
+                    <label class="form-label mb-0">Expires (optional)</label>
+                    <input id="newClientExpires" type="datetime-local" class="form-control">
+                  </div>
+                  <div class="col-auto">
+                    <button type="submit" class="btn btn-primary">Generate API-Key</button>
+                  </div>
+                </form>
+
+                <div id="newClientKeyBox" class="alert alert-success d-none" role="alert"></div>
+
+                <div class="table-responsive">
+                  <table class="table table-sm table-striped align-middle" id="clientsTable">
+                    <thead>
+                      <tr>
+                        <th>ID</th><th>Name</th><th>API-Key</th><th>Status</th>
+                        <th>Created</th><th>Last Access</th><th>Expires</th><th>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody></tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-header">Card Reader Client Test</div>
+              <div class="card-body">
+                <p class="text-muted small">Simulates an external reader posting a card UID, without requiring
+                  physical hardware &mdash; sends a real <code>POST /api/card/input</code> request.</p>
+
+                <form id="cardTestForm" class="row g-2 mb-3 align-items-end">
+                  <div class="col-auto">
+                    <label class="form-label mb-0">API-Key</label>
+                    <select id="testApiKeySelect" class="form-select" style="min-width: 22rem;">
+                      <option value="">Select a client...</option>
+                    </select>
+                  </div>
+                  <div class="col-auto">
+                    <label class="form-label mb-0">CardData</label>
+                    <input id="testCardData" class="form-control" placeholder="04AABBCCDDEE" required>
+                  </div>
+                  <div class="col-auto">
+                    <label class="form-label mb-0">Position</label>
+                    <input id="testPosition" type="number" class="form-control" value="1" style="width: 6rem;" required>
+                  </div>
+                  <div class="col-auto">
+                    <button type="submit" class="btn btn-primary">Send</button>
+                  </div>
+                </form>
+
+                <p><strong>HTTP Status:</strong> <span id="testHttpStatus">--</span></p>
+                <p><strong>JSON Response:</strong></p>
+                <pre id="testJsonResponse" class="hsf-tool-output" style="min-height: 3rem;"></pre>
+
+                <p><strong>Request History</strong></p>
+                <div class="table-responsive">
+                  <table class="table table-sm table-striped" id="testHistoryTable">
+                    <thead><tr><th>Time</th><th>CardData</th><th>Position</th><th>Status</th><th>Response</th></tr></thead>
+                    <tbody></tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- ============ ZK Controller ============ -->
+          <div class="tab-pane fade" id="tool-zk">
+            <div class="card mb-3">
+              <div class="card-header d-flex align-items-center gap-2">
+                ZK Controller
+                <span class="hsf-badge hsf-badge-idle ms-auto" id="zkConnBadge">--</span>
+              </div>
+              <div class="card-body">
+                <p class="text-muted small">Drives the gateway's <strong>own</strong> controller session &mdash;
+                  the same one the SmartLocker script uses, not a separate probe. That is what makes the RTLog
+                  below the events the running system actually saw; it is also why connecting or disconnecting
+                  here affects the live application.</p>
+
+                <div class="row g-2 align-items-end mb-3">
+                  <div class="col-auto">
+                    <label class="form-label mb-0">IP</label>
+                    <input id="zkIp" class="form-control" style="width: 12rem;" placeholder="from configuration">
+                  </div>
+                  <div class="col-auto">
+                    <label class="form-label mb-0">Port</label>
+                    <input id="zkPort" type="number" class="form-control" style="width: 7rem;" placeholder="4370">
+                  </div>
+                  <div class="col-auto">
+                    <label class="form-label mb-0">Timeout (ms)</label>
+                    <input id="zkTimeout" type="number" class="form-control" value="3000" style="width: 8rem;">
+                  </div>
+                  <div class="col-auto">
+                    <label class="form-label mb-0">Password</label>
+                    <input id="zkPassword" class="form-control" style="width: 9rem;" placeholder="from configuration">
+                  </div>
+                  <div class="col-auto d-flex gap-2" data-hsf-admin>
+                    <button class="btn btn-primary" id="zkConnect">Connect</button>
+                    <button class="btn btn-outline-secondary" id="zkDisconnect">Disconnect</button>
+                  </div>
+                  <div class="col-auto">
+                    <button class="btn btn-outline-secondary" id="zkRefresh">Refresh status</button>
+                  </div>
+                </div>
+
+                <pre class="hsf-tool-output mb-0" id="zkStatusOut"></pre>
+              </div>
+            </div>
+
+            <div class="card mb-3">
+              <div class="card-header d-flex align-items-center gap-2">
+                RTLog
+                <span class="hsf-badge hsf-badge-idle ms-auto" id="zkRtBadge">stopped</span>
+              </div>
+              <div class="card-body">
+                <p class="text-muted small">Real-time records straight from the panel, pushed over the
+                  dashboard WebSocket as they arrive. Every parsed record is shown &mdash; door events, alarms
+                  and auxiliary-input edges included, not only card taps.
+                  <strong>InOutStatus is not relabelled ReaderID</strong>: the driver's own header says that
+                  field's meaning is unconfirmed against real controller output.</p>
+
+                <div class="d-flex gap-2 mb-3 flex-wrap">
+                  <button class="btn btn-primary" id="zkRtStart" data-hsf-admin>Start RTLog</button>
+                  <button class="btn btn-outline-secondary" id="zkRtStop" data-hsf-admin>Stop RTLog</button>
+                  <button class="btn btn-outline-secondary" id="zkRtClear">Clear</button>
+                  <span class="align-self-center text-muted small" id="zkRtCount"></span>
+                </div>
+
+                <div class="table-responsive" style="max-height: 22rem; overflow-y: auto;">
+                  <table class="table table-sm table-striped align-middle mb-0" id="zkRtTable">
+                    <thead><tr>
+                      <th>Time</th><th>Card</th><th>PIN</th><th>Door</th>
+                      <th>Event</th><th>InOutStatus</th><th>Verify</th>
+                    </tr></thead>
+                    <tbody></tbody>
+                  </table>
+                </div>
+                <p class="text-muted small mb-0 mt-2" id="zkRtEmpty">No records yet.</p>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-header">Device Control</div>
+              <div class="card-body">
+                <p class="text-muted small">Raw <code>ControlDevice</code>, plus the one command with a name.
+                  Operation 1 is output control: <code>param1</code> = output number, <code>param2</code> =
+                  1 for a door/lock relay or 2 for an auxiliary output, <code>param3</code> = hold in whole
+                  seconds (255 latches it closed until released, 0 releases).</p>
+
+                <div class="row g-2 align-items-end mb-3">
+                  <div class="col-auto">
+                    <label class="form-label mb-0">Door</label>
+                    <input id="zkDoor" type="number" class="form-control" value="1" style="width: 6rem;">
+                  </div>
+                  <div class="col-auto">
+                    <label class="form-label mb-0">Seconds</label>
+                    <input id="zkDoorSeconds" type="number" class="form-control" value="3" style="width: 7rem;">
+                  </div>
+                  <div class="col-auto" data-hsf-admin>
+                    <button class="btn btn-primary" id="zkOpenDoor">Open Door</button>
+                  </div>
+                  <div class="col-auto ms-3">
+                    <label class="form-label mb-0">Params</label>
+                    <input id="zkParamItems" class="form-control" style="width: 20rem;"
+                           value="LockCount,AuxOutCount,AuxInCount,ReaderCount">
+                  </div>
+                  <div class="col-auto">
+                    <button class="btn btn-outline-secondary" id="zkGetParams">Get</button>
+                  </div>
+                </div>
+
+                <div class="row g-2 align-items-end mb-3">
+                  <div class="col-auto">
+                    <label class="form-label mb-0">Operation</label>
+                    <input id="zkOp" type="number" class="form-control" value="1" style="width: 7rem;">
+                  </div>
+                  <div class="col-auto">
+                    <label class="form-label mb-0">param1</label>
+                    <input id="zkP1" type="number" class="form-control" value="1" style="width: 6rem;">
+                  </div>
+                  <div class="col-auto">
+                    <label class="form-label mb-0">param2</label>
+                    <input id="zkP2" type="number" class="form-control" value="1" style="width: 6rem;">
+                  </div>
+                  <div class="col-auto">
+                    <label class="form-label mb-0">param3</label>
+                    <input id="zkP3" type="number" class="form-control" value="1" style="width: 6rem;">
+                  </div>
+                  <div class="col-auto">
+                    <label class="form-label mb-0">param4</label>
+                    <input id="zkP4" type="number" class="form-control" value="0" style="width: 6rem;">
+                  </div>
+                  <div class="col-auto" data-hsf-admin>
+                    <button class="btn btn-outline-danger" id="zkControl">Send ControlDevice</button>
+                  </div>
+                </div>
+
+                <p class="mb-1"><strong>Result</strong>
+                  <span class="hsf-badge hsf-badge-idle" id="zkDevBadge">--</span></p>
+                <pre class="hsf-tool-output mb-0" id="zkDevOut"></pre>
+              </div>
+            </div>
+          </div>
+
+          <!-- ============ Relay & Beeper ============ -->
+          <div class="tab-pane fade" id="tool-relay">
+            <div class="card mb-3">
+              <div class="card-header">Relay &amp; AUX Relay</div>
+              <div class="card-body">
+                <p class="text-muted small">One command with two address types: a <strong>user relay</strong>
+                  is a door/lock output, an <strong>AUX relay</strong> an auxiliary output.
+                  <strong>ON latches and stays latched</strong> &mdash; there is no timer behind it, so a door
+                  relay left ON is a door left unlocked until something turns it off. Use PULSE unless you are
+                  holding a relay to put a meter on it.</p>
+
+                <div class="alert alert-warning py-2 small" role="alert">
+                  These fire on the live controller. A lock relay pulsed here opens a real door, and the
+                  SmartLocker state machine will not know why.
+                </div>
+
+                <div class="row g-2 align-items-end mb-3">
+                  <div class="col-auto">
+                    <label class="form-label mb-0">Kind</label>
+                    <select id="rlKind" class="form-select" style="width: 11rem;">
+                      <option value="relay">User relay (lock)</option>
+                      <option value="aux-relay">AUX relay</option>
+                    </select>
+                  </div>
+                  <div class="col-auto">
+                    <label class="form-label mb-0">Number</label>
+                    <input id="rlNumber" type="number" class="form-control" value="1" style="width: 7rem;">
+                  </div>
+                  <div class="col-auto">
+                    <label class="form-label mb-0">Pulse (ms)</label>
+                    <input id="rlDuration" type="number" class="form-control" value="200" style="width: 8rem;">
+                  </div>
+                  <div class="col-auto d-flex gap-2" data-hsf-admin>
+                    <button class="btn btn-outline-danger" id="rlOn">ON</button>
+                    <button class="btn btn-outline-secondary" id="rlOff">OFF</button>
+                    <button class="btn btn-primary" id="rlPulse">PULSE</button>
+                  </div>
+                  <div class="col-auto">
+                    <button class="btn btn-outline-secondary" id="rlList">Read counts</button>
+                  </div>
+                </div>
+
+                <p class="mb-1"><strong>Result</strong>
+                  <span class="hsf-badge hsf-badge-idle" id="rlBadge">--</span></p>
+                <pre class="hsf-tool-output mb-0" id="rlOut"></pre>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-header">Beeper</div>
+              <div class="card-body">
+                <p class="text-muted small"><strong>The PullSDK has no beeper command.</strong> Nothing in
+                  <code>plcommpro.dll</code> addresses the reader's own sounder and no device parameter
+                  configures it, so a beep is whatever relay the sounder is wired to, pulsed. This panel is how
+                  you find out which one: step through the relays until you hear it, then put that number in
+                  <code>buzzer.aux_output</code> / <code>buzzer.relay</code> in smartlocker.json.</p>
+
+                <div class="row g-2 align-items-end mb-3">
+                  <div class="col-auto">
+                    <label class="form-label mb-0">Wired to</label>
+                    <select id="bpKind" class="form-select" style="width: 11rem;">
+                      <option value="user">User relay</option>
+                      <option value="aux">AUX relay</option>
+                    </select>
+                  </div>
+                  <div class="col-auto">
+                    <label class="form-label mb-0">Number</label>
+                    <input id="bpNumber" type="number" class="form-control" value="1" style="width: 7rem;">
+                  </div>
+                  <div class="col-auto">
+                    <label class="form-label mb-0">Beeps</label>
+                    <input id="bpCount" type="number" class="form-control" value="2" style="width: 6rem;">
+                  </div>
+                  <div class="col-auto">
+                    <label class="form-label mb-0">On (ms)</label>
+                    <input id="bpOn" type="number" class="form-control" value="150" style="width: 7rem;">
+                  </div>
+                  <div class="col-auto">
+                    <label class="form-label mb-0">Gap (ms)</label>
+                    <input id="bpGap" type="number" class="form-control" value="150" style="width: 7rem;">
+                  </div>
+                  <div class="col-auto" data-hsf-admin>
+                    <button class="btn btn-primary" id="bpBeep">Beep</button>
+                  </div>
+                </div>
+
+                <p class="mb-1"><strong>Result</strong>
+                  <span class="hsf-badge hsf-badge-idle" id="bpBadge">--</span></p>
+                <pre class="hsf-tool-output mb-0" id="bpOut"></pre>
+              </div>
+            </div>
+          </div>
+
+          <!-- ============ Input Monitor ============ -->
+          <div class="tab-pane fade" id="tool-inputs">
+            <div class="card mb-3">
+              <div class="card-header d-flex align-items-center gap-2">
+                AUX Inputs
+                <span class="hsf-badge hsf-badge-idle ms-auto" id="inBadge">--</span>
+              </div>
+              <div class="card-body">
+                <p class="text-muted small">Auxiliary inputs are <strong>event-driven</strong>: the SDK has no
+                  read-input call at all. An input announces itself as an RTLog edge (220 open, 221 shorted) and
+                  is silent otherwise, so one nobody has triggered since start-up has no state to show &mdash;
+                  it is listed as unknown rather than invented as LOW. Trigger it once and it appears.
+                  RTLog must be running for edges to arrive.</p>
+
+                <div class="d-flex gap-2 mb-3">
+                  <button class="btn btn-outline-secondary" id="inRefresh">Refresh</button>
+                </div>
+
+                <div class="table-responsive">
+                  <table class="table table-sm table-striped align-middle mb-0" id="inTable">
+                    <thead><tr><th>Input</th><th>State</th><th>Last change</th></tr></thead>
+                    <tbody></tbody>
+                  </table>
+                </div>
+                <p class="text-muted small mb-0 mt-2" id="inEmpty">No input has reported an edge yet.</p>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-header">Button Input</div>
+              <div class="card-body">
+                <p class="text-muted small mb-0" id="btnNote">Checking&hellip;</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- ============ RabbitMQ ============ -->
+          <div class="tab-pane fade" id="tool-mq">
+            <div class="card mb-3">
+              <div class="card-header d-flex align-items-center gap-2">
+                Broker connection
+                <span class="hsf-badge hsf-badge-idle ms-auto" id="mqConnBadge">--</span>
+              </div>
+              <div class="card-body">
+                <p class="text-muted small">Every operation on this page opens its <strong>own</strong>
+                  short-lived connection and closes it again &mdash; deliberately not the gateway's. An ad-hoc
+                  consumer on the live channel would eat messages the SmartLocker script is waiting for.
+                  Publishing from here and watching the live client receive it is exactly how the scenario at
+                  the bottom is meant to be checked.</p>
+
+                <p class="text-muted small">Blank fields fall back to the gateway's configured broker, so the
+                  common case needs no typing &mdash; and nobody points a topology-creating button at the wrong
+                  broker by accident.</p>
+
+                <div class="row g-2 align-items-end mb-3">
+                  <div class="col-auto">
+                    <label class="form-label mb-0">Host</label>
+                    <input id="mqHost" class="form-control" style="width: 12rem;" placeholder="from configuration">
+                  </div>
+                  <div class="col-auto">
+                    <label class="form-label mb-0">Port</label>
+                    <input id="mqPort" type="number" class="form-control" style="width: 7rem;" placeholder="5672">
+                  </div>
+                  <div class="col-auto">
+                    <label class="form-label mb-0">Username</label>
+                    <input id="mqUser" class="form-control" style="width: 9rem;" placeholder="from configuration">
+                  </div>
+                  <div class="col-auto">
+                    <label class="form-label mb-0">Password</label>
+                    <input id="mqPassword" type="password" class="form-control" style="width: 9rem;"
+                           placeholder="from configuration">
+                  </div>
+                  <div class="col-auto">
+                    <label class="form-label mb-0">VHost</label>
+                    <input id="mqVhost" class="form-control" style="width: 6rem;" placeholder="/">
+                  </div>
+                  <div class="col-auto d-flex gap-2">
+                    <button class="btn btn-primary" id="mqConnect">Test connection</button>
+                    <button class="btn btn-outline-secondary" id="mqStatus">Refresh</button>
+                  </div>
+                </div>
+
+                <pre class="hsf-tool-output mb-0" id="mqStatusOut"></pre>
+              </div>
+            </div>
+
+            <div class="card mb-3">
+              <div class="card-header">Topology</div>
+              <div class="card-body">
+                <div class="alert alert-warning py-2 small" role="alert">
+                  These create real objects on the broker. A durable exchange or queue outlives this page and
+                  every restart; a mismatched redeclare of something that already exists is a channel error,
+                  not a no-op.
+                </div>
+
+                <div class="row g-2 align-items-end mb-3">
+                  <div class="col-auto">
+                    <label class="form-label mb-0">Exchange</label>
+                    <input id="mqExchange" class="form-control" style="width: 15rem;"
+                           placeholder="smartlocker.events">
+                  </div>
+                  <div class="col-auto">
+                    <label class="form-label mb-0">Type</label>
+                    <select id="mqExchangeType" class="form-select" style="width: 9rem;">
+                      <option value="topic">topic</option>
+                      <option value="direct">direct</option>
+                      <option value="fanout">fanout</option>
+                      <option value="headers">headers</option>
+                    </select>
+                  </div>
+                  <div class="col-auto">
+                    <label class="form-label mb-0">Queue</label>
+                    <input id="mqQueue" class="form-control" style="width: 15rem;"
+                           placeholder="smartlocker.gateway">
+                  </div>
+                  <div class="col-auto">
+                    <label class="form-label mb-0">Routing key</label>
+                    <input id="mqRoutingKey" class="form-control" style="width: 14rem;"
+                           placeholder="employee.card.created">
+                  </div>
+                </div>
+
+                <div class="d-flex gap-3 align-items-center mb-3 flex-wrap">
+                  <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" id="mqDurable" checked>
+                    <label class="form-check-label small" for="mqDurable">Durable</label>
+                  </div>
+                  <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" id="mqAutoDelete">
+                    <label class="form-check-label small" for="mqAutoDelete">Auto delete</label>
+                  </div>
+                  <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" id="mqExclusive">
+                    <label class="form-check-label small" for="mqExclusive">Exclusive (queue)</label>
+                  </div>
+
+                  <div class="d-flex gap-2 ms-auto" data-hsf-admin>
+                    <button class="btn btn-outline-primary" id="mqCreateExchange">Create exchange</button>
+                    <button class="btn btn-outline-primary" id="mqCreateQueue">Create queue</button>
+                    <button class="btn btn-outline-primary" id="mqBind">Bind</button>
+                  </div>
+                </div>
+
+                <p class="mb-1"><strong>Result</strong>
+                  <span class="hsf-badge hsf-badge-idle" id="mqTopoBadge">--</span></p>
+                <pre class="hsf-tool-output mb-0" id="mqTopoOut"></pre>
+              </div>
+            </div>
+
+            <div class="card mb-3">
+              <div class="card-header">Publish</div>
+              <div class="card-body">
+                <p class="text-muted small">Sent inside a transaction, so a success means the broker committed
+                  it &mdash; not merely that the bytes left this process. Note a commit still succeeds for a
+                  message no queue was bound to receive: AMQP drops unroutable messages silently.
+                  Uses the Exchange and Routing key above.</p>
+
+                <textarea id="mqBody" class="form-control font-monospace mb-2" rows="8"></textarea>
+
+                <div class="d-flex gap-2 mb-3 flex-wrap">
+                  <button class="btn btn-primary" id="mqPublish" data-hsf-admin>Publish</button>
+                  <button class="btn btn-outline-secondary" id="mqFillEmployee">Employee created</button>
+                  <button class="btn btn-outline-secondary" id="mqFillContractor">Contractor created</button>
+                  <span class="align-self-center text-muted small">
+                    The two buttons fill in the SmartLocker scenario payloads and set the routing key.</span>
+                </div>
+
+                <p class="mb-1"><strong>Result</strong>
+                  <span class="hsf-badge hsf-badge-idle" id="mqPubBadge">--</span></p>
+                <pre class="hsf-tool-output mb-0" id="mqPubOut"></pre>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-header">Consume</div>
+              <div class="card-body">
+                <p class="text-muted small">Drains the queue above until it has enough messages or the timeout
+                  passes. <strong>Peek requeues</strong> what it reads, so the message is still there for
+                  whoever it was meant for; <strong>Ack</strong> consumes it for good. An empty result after
+                  the timeout is a healthy queue, not a failure.</p>
+
+                <div class="row g-2 align-items-end mb-3">
+                  <div class="col-auto">
+                    <label class="form-label mb-0">Max messages</label>
+                    <input id="mqMax" type="number" class="form-control" value="10" style="width: 8rem;">
+                  </div>
+                  <div class="col-auto">
+                    <label class="form-label mb-0">Timeout (ms)</label>
+                    <input id="mqTimeout" type="number" class="form-control" value="3000" style="width: 8rem;">
+                  </div>
+                  <div class="col-auto d-flex gap-2">
+                    <button class="btn btn-outline-secondary" id="mqPeek">Peek (requeue)</button>
+                    <button class="btn btn-outline-danger" id="mqConsume" data-hsf-admin>Consume (ack)</button>
+                  </div>
+                  <div class="col-auto">
+                    <span class="hsf-badge hsf-badge-idle" id="mqConsBadge">--</span>
+                  </div>
+                </div>
+
+                <div class="table-responsive" style="max-height: 22rem; overflow-y: auto;">
+                  <table class="table table-sm table-striped align-middle mb-0" id="mqMsgTable">
+                    <thead><tr>
+                      <th>Exchange</th><th>Routing key</th><th>Message ID</th><th>Redelivered</th><th>Body</th>
+                    </tr></thead>
+                    <tbody></tbody>
+                  </table>
+                </div>
+                <p class="text-muted small mb-0 mt-2" id="mqMsgEmpty">Nothing received.</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- ============ SmartLocker scenario ============ -->
+          <div class="tab-pane fade" id="tool-scenario">
+            <div class="card mb-3">
+              <div class="card-header">SmartLocker end-to-end scenario</div>
+              <div class="card-body">
+                <p class="text-muted small">Publishes a card event and then <strong>watches for it to
+                  land</strong>: the broker committing a message says nothing about whether this gateway's
+                  consumer decoded it, upserted the card and assigned a locker. Each of those is checked
+                  separately against the SmartLocker database.</p>
+
+                <div class="alert alert-warning py-2 small" role="alert">
+                  This publishes to the broker configured on the RabbitMQ tab &mdash; by default the
+                  <strong>live</strong> one. The message enters the real card pipeline and any other consumer
+                  bound to that exchange will see it. It also creates a real card and takes a real locker in
+                  this gateway's database; use the Release button below when you are done.
+                </div>
+
+                <div class="row g-2 align-items-end mb-3">
+                  <div class="col-auto">
+                    <label class="form-label mb-0">Scenario</label>
+                    <select id="scRole" class="form-select" style="width: 12rem;">
+                      <option value="employee">Employee created</option>
+                      <option value="contractor">Contractor created</option>
+                    </select>
+                  </div>
+                  <div class="col-auto">
+                    <label class="form-label mb-0">Card code</label>
+                    <input id="scCard" class="form-control" value="TEST0001" style="width: 10rem;">
+                  </div>
+                  <div class="col-auto">
+                    <label class="form-label mb-0">Wait (ms)</label>
+                    <input id="scWait" type="number" class="form-control" value="8000" style="width: 8rem;">
+                  </div>
+                  <div class="col-auto d-flex gap-2">
+                    <button class="btn btn-primary" id="scRun" data-hsf-admin>Run scenario</button>
+                    <button class="btn btn-outline-secondary" id="scVerify">Verify only</button>
+                  </div>
+                  <div class="col-auto">
+                    <span class="hsf-badge hsf-badge-idle" id="scBadge">--</span>
+                  </div>
+                </div>
+
+                <p class="text-muted small mb-2">Routing goes to the exchange and routing key on the
+                  <strong>RabbitMQ</strong> tab, which prefill from this gateway's own topology &mdash; the
+                  plan's example names (<code>smartlocker.events</code> / <code>employee.card.created</code>)
+                  are not what this deployment binds, so a message sent to those would never reach the queue.</p>
+
+                <div class="table-responsive mb-3">
+                  <table class="table table-sm align-middle mb-0" id="scStepTable">
+                    <thead><tr><th style="width:3rem"></th><th>Step</th><th>Detail</th></tr></thead>
+                    <tbody></tbody>
+                  </table>
+                </div>
+
+                <pre class="hsf-tool-output mb-0" id="scOut"></pre>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-header">Clean up</div>
+              <div class="card-body">
+                <p class="text-muted small">A scenario run leaves a real card and a real locker assignment
+                  behind. Releasing puts the locker back to EMPTY; the card row stays until the next full
+                  synchronisation reconciles it away.</p>
+                <button class="btn btn-outline-danger" id="scRelease" data-hsf-admin>Release this card's locker</button>
+                <span class="hsf-badge hsf-badge-idle ms-2" id="scReleaseBadge">--</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- ============ Test Log ============ -->
+          <div class="tab-pane fade" id="tool-test-log">
+            <div class="card">
+              <div class="card-header">Test Tool Operation Log</div>
+              <div class="card-body">
+                <p class="text-muted small">Every Test Tool operation, with what was asked, what happened and
+                  how long it took. Kept in memory as a tail &mdash; the durable record is the gateway's own
+                  log, where each of these also appears.</p>
+
+                <div class="d-flex gap-2 mb-3">
+                  <button class="btn btn-outline-secondary" id="tlRefresh">Refresh</button>
+                  <button class="btn btn-outline-danger" id="tlClear">Clear</button>
+                </div>
+
+                <div class="table-responsive" style="max-height: 30rem; overflow-y: auto;">
+                  <table class="table table-sm table-striped align-middle mb-0" id="tlTable">
+                    <thead><tr>
+                      <th>Time</th><th>Module</th><th>Operation</th><th>Result</th>
+                      <th>Duration</th><th>Parameters</th><th>Error</th>
+                    </tr></thead>
+                    <tbody></tbody>
+                  </table>
+                </div>
+                <p class="text-muted small mb-0 mt-2" id="tlEmpty">Nothing logged yet.</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="tab-pane fade" id="tool-network">
+            <div class="card"><div class="card-header">Network Diagnostics</div><div class="card-body">
+              <p class="text-muted small">Checks the gateway HTTP endpoint and WebSocket connection from this browser.</p>
+              <div class="d-flex gap-2 align-items-center mb-3"><button class="btn btn-primary" id="netCheck">Run check</button><span class="hsf-badge hsf-badge-idle" id="netBadge">--</span></div>
+              <pre class="hsf-tool-output mb-0" id="netOutput">No check performed.</pre>
+            </div></div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="js/ws.js"></script>
+  <script src="js/layout.js"></script>
+  <!-- Update popup: on every page with the shared chrome, so a release that
+       lands while someone is on Logs or Test Tools is still noticed. -->
+  <script src="js/update.js"></script>
+  <script src="js/card_clients.js"></script>
+  <script src="js/test_tools.js"></script>
+</body>
+</html>

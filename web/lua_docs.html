@@ -247,6 +247,37 @@ end</pre>
 
     <h4 class="mt-4">Modbus</h4>
 
+    <div class="alert alert-info">
+      <strong>Updated Modbus API.</strong> The gateway now exposes the complete
+      bit/register API below: coils (FC01), discrete inputs (FC02), holding
+      registers (FC03), input registers (FC04), named typed mappings, and
+      explicit address-space registration. Addresses passed to Lua are
+      zero-based protocol offsets; presentation prefixes such as
+      <code>40001</code> must be converted by the script or its configuration
+      layer. The configured Modbus TCP slave uses the same shared register
+      store, so values written by Lua mappings are visible to slave clients.
+    </div>
+
+    <div class="api-doc-block">
+      <h5>Updated API summary</h5>
+      <div class="table-responsive">
+        <table class="table table-sm align-middle">
+          <thead><tr><th>Address space</th><th>Read</th><th>Write / mapping</th></tr></thead>
+          <tbody>
+            <tr><td>Coils (FC01)</td><td><code>ReadCoil</code>, <code>ReadCoils</code></td><td><code>WriteCoil</code>, <code>WriteCoils</code>, <code>RegisterOutput</code></td></tr>
+            <tr><td>Discrete inputs (FC02)</td><td><code>ReadDiscreteInput</code>, <code>ReadDiscreteInputs</code></td><td><code>RegisterDiscreteInput</code>, <code>RegisterCoilInput</code></td></tr>
+            <tr><td>Holding registers (FC03)</td><td><code>ReadHolding</code>, <code>ReadHoldingRegisters</code></td><td><code>WriteHolding</code>, <code>WriteHoldingRegisters</code></td></tr>
+            <tr><td>Input registers (FC04)</td><td><code>ReadInputRegister</code>, <code>ReadInputRegisters</code></td><td>Read-only; use <code>RegisterRegister</code> with <code>source = "input"</code></td></tr>
+            <tr><td>Typed mappings</td><td><code>GetRegister</code></td><td><code>RegisterRegister</code>, <code>SetRegister</code></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="mb-0 text-muted">The aliases <code>ReadDiscInput</code> and
+        <code>ReadDiscInputs</code> are also available. Failed reads return
+        <code>nil</code>; writes return <code>true</code> or
+        <code>false, error</code>.</p>
+    </div>
+
     <div class="api-doc-block">
       <h5><code>Modbus.IsConnected()</code></h5>
       <p>Reports whether the gateway currently has a live Modbus TCP connection to the PLC. Doesn't attempt to
@@ -1123,6 +1154,7 @@ Log.Info("PLC at " .. plc.ip .. ":" .. tostring(plc.port))</pre>
 
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
   <script src="js/layout.js"></script>
+  <script src="js/lua_docs.js"></script>
   <script src="js/ws.js"></script>
   <!-- Update popup: on every page with the shared chrome, so a release that
        lands while someone is on Logs or Test Tools is still noticed. -->

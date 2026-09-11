@@ -2,6 +2,44 @@
   const form = document.getElementById("configForm");
   const alertBox = document.getElementById("saveAlert");
 
+  // Keep configuration in one form (so saving and connection tests keep their
+  // existing behaviour), while exposing one focused panel at a time.
+  const configTabs = Array.from(document.querySelectorAll("[data-config-tab]"));
+  const configPanels = Array.from(document.querySelectorAll("[data-config-panel]"));
+
+  function selectConfigTab(tabName, updateUrl) {
+    const validTab = configPanels.some((panel) => panel.dataset.configPanel === tabName);
+    const selected = validTab ? tabName : "general";
+    configTabs.forEach((tab) => {
+      const active = tab.dataset.configTab === selected;
+      tab.classList.toggle("active", active);
+      tab.setAttribute("aria-selected", String(active));
+      tab.tabIndex = active ? 0 : -1;
+    });
+    configPanels.forEach((panel) => {
+      const active = panel.dataset.configPanel === selected;
+      panel.classList.toggle("is-active", active);
+      panel.hidden = !active;
+    });
+    if (updateUrl) {
+      const url = new URL(window.location.href);
+      url.searchParams.set("tab", selected);
+      window.history.replaceState(null, "", url);
+    }
+  }
+
+  configTabs.forEach((tab) => tab.addEventListener("click", () => selectConfigTab(tab.dataset.configTab, true)));
+  configTabs.forEach((tab, index) => tab.addEventListener("keydown", (event) => {
+    if (!['ArrowLeft', 'ArrowUp', 'ArrowRight', 'ArrowDown', 'Home', 'End'].includes(event.key)) return;
+    event.preventDefault();
+    const direction = event.key === 'ArrowLeft' || event.key === 'ArrowUp' ? -1 : 1;
+    const next = event.key === 'Home' ? 0 : event.key === 'End' ? configTabs.length - 1 :
+      (index + direction + configTabs.length) % configTabs.length;
+    configTabs[next].focus();
+    selectConfigTab(configTabs[next].dataset.configTab, true);
+  }));
+  selectConfigTab(new URLSearchParams(window.location.search).get("tab") || "general", false);
+
   function setByPath(obj, path, value) {
     const parts = path.split(".");
     let node = obj;
@@ -46,8 +84,7 @@
   }
 
   function showAlert(message, ok) {
-    alertBox.textContent = message;
-    alertBox.className = "alert " + (ok ? "alert-success" : "alert-danger");
+    alertBox.className = "d-none";
     if (window.HsfNotify) window.HsfNotify(message, ok);
   }
 
@@ -71,6 +108,49 @@
     return fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })
       .then((r) => r.json());
   }
+
+  function applicationField(field, value, application) {
+    const wrapper = document.createElement("div");
+    wrapper.className = "col-md-6 mb-2";
+    const label = document.createElement("label");
+    label.className = "form-label";
+    label.textContent = field.label || field.id;
+    label.htmlFor = "app-config-" + application + "-" + field.id;
+    const input = document.createElement("input");
+    input.className = "form-control";
+    input.id = label.htmlFor;
+    input.name = field.id;
+    input.value = value === undefined ? (field.default === undefined ? "" : field.default) : value;
+    input.required = !!field.required;
+    const type = field.type || "string";
+    if (type === "boolean") { input.type = "checkbox"; input.className = "form-check-input"; input.checked = !!(value === undefined ? field.default : value); }
+    else if (["number", "integer", "port"].includes(type)) input.type = "number";
+    else if (type === "password") input.type = "password";
+    else if (type === "url") input.type = "url";
+    else if (["textarea", "json"].includes(type)) { const area = document.createElement("textarea"); area.className = "form-control"; area.id = input.id; area.name = input.name; area.required = input.required; area.value = input.value; wrapper.append(label, area); return wrapper; }
+    wrapper.append(label, input); return wrapper;
+  }
+
+  function renderApplicationConfigs(data) {
+    const section = document.getElementById("applicationConfigSection");
+    const cards = document.getElementById("applicationConfigCards");
+    const applications = Array.isArray(data) ? data : (data.applications || []);
+    cards.replaceChildren();
+    applications.forEach((application) => {
+      const card = document.createElement("form"); card.className = "border rounded p-3 mb-3"; card.dataset.application = application.application;
+      const title = document.createElement("h5"); title.textContent = application.title || application.application; card.appendChild(title);
+      const fields = document.createElement("div"); fields.className = "row";
+      const schemaFields = (application.schema || application).fields || [];
+      const values = application.values || {};
+      schemaFields.forEach((field) => fields.appendChild(applicationField(field, values[field.id], application.application))); card.appendChild(fields);
+      const save = document.createElement("button"); save.type = "submit"; save.className = "btn btn-primary btn-sm"; save.textContent = "Save application";
+      const result = document.createElement("span"); result.className = "small ms-2";
+      card.append(save, result); card.addEventListener("submit", (event) => { event.preventDefault(); const valuesToSave = {}; card.querySelectorAll("[name]").forEach((input) => { valuesToSave[input.name] = input.type === "checkbox" ? input.checked : (input.type === "number" ? Number(input.value) : input.value); }); result.textContent = "Saving…"; postJson("/api/application-config", { application: application.application, values: valuesToSave }).then((reply) => { result.textContent = reply.error || "Saved."; result.className = "small ms-2 " + (reply.error ? "text-danger" : "text-success"); }).catch(() => { result.textContent = "Save failed."; result.className = "small ms-2 text-danger"; }); }); cards.appendChild(card);
+    });
+    section.hidden = applications.length === 0 || !section.classList.contains("is-active");
+  }
+
+  fetch("/api/application-config").then((r) => r.ok ? r.json() : { applications: [] }).then(renderApplicationConfigs).catch(() => {});
 
   fetch("/api/config")
     .then((r) => r.json())
@@ -384,8 +464,8 @@
     updateStatusBox.textContent = describeUpdate(status);
     const bad = status.state === "error" ||
                 (status.enabled && status.require_signature && /not compiled in/.test(status.signature_backend || ""));
-    updateStatusBox.className = "alert py-2 px-3 small " +
-      (bad ? "alert-warning" : status.available ? "alert-info" : "alert-secondary");
+    updateStatusBox.className = "hsf-inline-status py-2 px-3 small " +
+      (bad ? "hsf-inline-status-warning" : status.available ? "hsf-inline-status-info" : "hsf-inline-status-neutral");
   }
 
   function refreshUpdateStatus() {

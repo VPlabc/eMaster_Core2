@@ -1,0 +1,10 @@
+{
+  "platform": "linux",
+  "architecture": "aarch64",
+  "zk": false,
+  "compiler": "aarch64-linux-gnu-g++",
+  "dependencies": "vcpkg-arm64-release-triplet",
+  "install_layout": "releases/current/data",
+  "package_format": "tar.gz",
+  "runtime_verification": "pending-target-environment"
+}

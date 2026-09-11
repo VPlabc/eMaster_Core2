@@ -1,0 +1,332 @@
+{
+  "_comment": [
+    "SmartLocker configuration (Plan section 16).",
+    "",
+    "Loaded over the defaults in config.lua, which is where every setting is",
+    "documented -- read that file for what a key means and what happens if it is",
+    "left out. Anything omitted here keeps its default, so this file only has to",
+    "carry what this installation does differently.",
+    "",
+    "Two locations are searched, in order:",
+    "   config/scripts/smartlocker/smartlocker.json   (this file)",
+    "   config/smartlocker.json",
+    "",
+    "Addresses that the gateway already knows are inherited from its own",
+    "configuration (config.db, the web Configuration page) and do not need to be",
+    "repeated: plc.host/port from modbus.ip/port, reader.host/port/password from",
+    "the zk section, server.base_url/api_key from the rest section, and",
+    "system.machine_id from the system section.",
+    "",
+    "Addresses are logical, not protocol offsets -- hardware/modbus.lua converts",
+    "them. With plc.address_mode \"locker_io\" (this cabinet): 10001 is the first",
+    "lock relay coil (Y0), 20001 the first door sensor discrete input (X0),",
+    "30001 the first input register and 40001 the first holding register."
+  ],
+
+  "system": {
+    "machine_id": "SL001",
+    "name": "SmartLocker Gateway",
+    "loop_interval_ms": 100
+  },
+
+  "plc": {
+    "host": "192.168.2.240",
+    "port": 502,
+
+    "_comment_address_mode": [
+      "\"locker_io\" -- this cabinet's I/O is bit addressed: one COIL per lock",
+      "relay from 10001 (Y0) and one DISCRETE INPUT per door sensor from 20001",
+      "(X0), across the PLC's internal I/O and its expansion module. 30001 and",
+      "40001 keep their usual meaning.",
+      "\"modicon\" is the classic map, where 10001 is a discrete input instead --",
+      "use it for a cabinet whose doors are packed into registers.",
+      "\"raw\" passes the numbers straight through and cannot be used with the",
+      "segment form below."
+    ],
+    "address_mode": "locker_io",
+
+    "input_space": "discrete_input",
+    "input_base": 20001,
+    "output_space": "coil",
+    "output_base": 10001,
+
+    "_comment_polarity": "1 = the input is SET when the door stands open. Verify with tests/test_modbus_input.lua before going live (Plan section 5.1).",
+    "door_open_value": 1,
+
+    "retry_count": 1,
+    "retry_delay_ms": 50
+  },
+
+  "locker": {
+    "lock_trigger_ms": 100,
+    "door_open_timeout": 30,
+    "door_close_timeout": 30,
+    "wrong_type_beep_count": 5,
+
+    "allow_cross_type": false,
+    "assign_on_scan": true,
+    "enforce_block": false,
+
+    "_comment_contractor_mode": [
+      "How a contractor holds a locker. Pick ONE -- the two models answer the",
+      "same question differently and running both would make neither",
+      "predictable.",
+      "",
+      "  1  BY PERIOD (default). The locker is theirs while their card is",
+      "     valid, and comes back when they have finished their last day AND",
+      "     their period has ended.",
+      "",
+      "  2  BY HOLD. The locker is theirs for hold_hours from the moment it was",
+      "     assigned, then it goes back in the pool for the next person",
+      "     whatever state it is in. The hot-desk model, for a shared cabinet",
+      "     where nobody keeps a door overnight.",
+      "",
+      "Mode 2 also honours the mode 1 rule, so somebody who finishes and",
+      "expires inside their hold frees the door early instead of sitting on it",
+      "for the rest of the 24 hours.",
+      "",
+      "NOTE mode 2 reclaims WITHOUT asking whether the person finished. That is",
+      "the trade the hot-desk model makes on purpose: a cabinet that promises",
+      "the door to the next person at a known time cannot also wait for the",
+      "previous occupant to remember to sign out. Belongings left inside are",
+      "handled by whoever empties the locker, not by the software."
+    ],
+    "contractor_mode": 2,
+    "hold_hours": 24,
+
+    "_comment_auto_reclaim": [
+      "Take a contractor's locker back once they have BOTH finished their last",
+      "day (the scan sequence) AND run out of card period. Both, never one:",
+      "   completed + expired    -> reclaimed, the locker goes EMPTY",
+      "   expired, not completed -> left EXPIRED for a person to open",
+      "The second case is why this is safe on a timer: a contractor who never",
+      "performed the finishing gesture may still have a bag in there, and no",
+      "schedule should decide otherwise. Use the admin override for those."
+    ],
+    "auto_reclaim": true,
+
+    "_comment_blocks": [
+      "One block per cabinet, 18 doors. `segments` is one entry per physical",
+      "I/O module: the address its first point answers at, and how many points",
+      "it carries. Door n of the block is the n-th point of the segments joined",
+      "end to end, so doors 1-6 sit on the PLC's own I/O and doors 7-18 on the",
+      "expansion module -- with no address invented in the gap between them.",
+      "",
+      "  door  1-6   input  20001-20006   output 10001-10006   (internal X0-X5 / Y0-Y5)",
+      "  door  7-18  input  20017-20028   output 10017-10028   (expansion module)",
+      "",
+      "VERIFY THE EXPANSION BASE. 20017/10017 assumes the module starts at the",
+      "next 16-point boundary, which is the common layout but not a fact about",
+      "this panel. Read the first expansion point's address off the PLC program",
+      "and correct the second segment's `address` if it differs -- that is the",
+      "only number to change, and tests/test_modbus_input.lua walks every door",
+      "so a wrong base shows up as doors 7-18 that never move.",
+      "",
+      "`output.count` is how many doors have an unlock output wired. 18 here:",
+      "every door can be opened. Lower it and the doors past it report their",
+      "state but are never handed out -- the shape Plan section 6 describes.",
+      "",
+      "A second cabinet is a second block with its own segments, e.g.",
+      "   { \"id\": 2, \"name\": \"Contractor\", \"type\": \"contractor\", \"count\": 12,",
+      "     \"input\":  { \"space\": \"discrete_input\", \"segments\": [ { \"address\": 20033, \"count\": 12 } ] },",
+      "     \"output\": { \"space\": \"coil\", \"count\": 12, \"segments\": [ { \"address\": 10033, \"count\": 12 } ] } }"
+    ],
+    "blocks": [
+      {
+        "id": 1,
+        "name": "Employee",
+        "type": "contractor",
+        "count": 18,
+        "input": {
+          "space": "discrete_input",
+          "segments": [
+            { "address": 20001, "count": 6 },
+            { "address": 20017, "count": 12 }
+          ]
+        },
+        "output": {
+          "space": "coil",
+          "count": 18,
+          "segments": [
+            { "address": 10001, "count": 6 },
+            { "address": 10017, "count": 12 }
+          ]
+        }
+      }
+    ],
+
+    "female_priority": {
+      "enabled": false,
+      "start": 1,
+      "end": 6
+    }
+  },
+
+  "contractor": {
+    "_comment": [
+      "The contractor working day (CardScanPlan section 1 and 2). The card's",
+      "PERIOD comes from the server (start_at .. expire_at); the settings here",
+      "describe a day inside that period.",
+      "",
+      "FINISHING THE DAY IS A GESTURE, NOT A TIME. Every open is USING, however",
+      "many there are -- opening the locker at 08:10, at noon and again at 16:00",
+      "is three opens and no ending. The day ends when the contractor says so:",
+      "complete_scan_count scans of the same card in a row, no more than",
+      "complete_scan_timeout seconds apart.",
+      "",
+      "   scan            -> USING",
+      "   scan x3 (fast)  -> COMPLETED   (one long beep + one short)",
+      "   scan again      -> USING again, if the card's period has not ended",
+      "   scan x3 again   -> COMPLETED again",
+      "   midnight while USING -> that day EXPIRES",
+      "",
+      "complete_scan_timeout tells a deliberate gesture from ordinary use. Set",
+      "it to 0 to drop the time limit, which makes 'any three opens today'",
+      "finish the day instead. It must stay above reader.repeat_ignore_ms",
+      "(3000 ms), which drops a repeat of the same card.",
+      "",
+      "The morning/afternoon windows now do ONE job: refusing an open outside",
+      "them, and only when usage_timeout_enabled is true. They finish nothing.",
+      "",
+      "Overtime is not written here. The server pushes it with",
+      "   POST /api/app/contractor/overtime?until=21:00",
+      "and it applies to that day only -- tonight's overtime must never become",
+      "tomorrow's normal finishing time."
+    ],
+    "morning_start": "08:00",
+    "morning_end": "09:30",
+    "afternoon_start": "17:00",
+    "afternoon_end": "19:00",
+    "complete_scan_count": 3,
+    "complete_scan_timeout": 10,
+    "allow_ot": true,
+    "usage_timeout_enabled": false,
+    "enforce_start_date": true,
+    "overtime_expires_daily": true
+  },
+
+  "admin": {
+    "_comment": [
+      "Admin cards (CardScanPlan sections 3-7). NOT employee records: they are",
+      "recognised before any database lookup, so an admin card is never handed a",
+      "locker, never expires, and is never deactivated by a synchronisation that",
+      "did not mention it.",
+      "",
+      "Scan an admin card unlock_all_scan_count times in a row -- with no more",
+      "than scan_timeout seconds between scans -- to open ADMIN_ACCESS_MODE.",
+      "In that mode:",
+      "   a user card    opens THAT person's locker, expired or not",
+      "   an admin scan  opens the NEXT expired locker, one door per scan",
+      "   nothing for override_timeout seconds closes the mode",
+      "",
+      "NOTE the reader's own de-bounce: reader.repeat_ignore_ms (3000 ms) drops",
+      "a repeat of the same card, so five scans are five presentations at least",
+      "three seconds apart. scan_timeout has to stay comfortably above that.",
+      "",
+      "Left disabled with an empty list: turn it on and fill in the real card",
+      "codes, which are what tests/test_zk_reader.lua prints when the card is",
+      "presented."
+    ],
+    "enabled": false,
+    "cards": [],
+    "unlock_all_scan_count": 5,
+    "scan_timeout": 10,
+    "override_timeout": 60,
+    "scan_opens_expired": true,
+    "override_expired": true
+  },
+
+  "reader": {
+    "_comment": "source is \"zk\" (the access controller), \"card_api\" (readers POSTing to /api/card/input) or \"both\". card_format decides what a swipe becomes: run tests/test_zk_reader.lua, which prints the same card in every format, and pick the one the server uses.",
+    "source": "zk",
+    "host": "192.168.1.201",
+    "port": 4370,
+    "timeout_ms": 2000,
+    "password": "",
+
+    "card_format": "hex_msb",
+    "reconstruct_parity": true,
+    "repeat_ignore_ms": 3000,
+
+    "_comment_blocks": "DoorID -> block id, for a gateway serving more than one cabinet. Keys are strings.",
+    "block_by_door": {},
+    "default_block": 1
+  },
+
+  "buzzer": {
+    "_comment": [
+      "Nothing in the ZKTeco PullSDK addresses the reader's own sounder, so the",
+      "buzzer is whatever relay it is wired to:",
+      "   backend \"zk\"  -> a relay on the access controller, picked by",
+      "                     `relay` (number) and `relay_kind`:",
+      "                       \"user\" = lock/door relay   (address type 1)",
+      "                       \"aux\"  = auxiliary output  (address type 2)",
+      "   backend \"plc\" -> Modbus coil/register bit `register`/`bit`",
+      "",
+      "FIND THE RELAY FIRST. Open the Test Tools page -> Relay & Beeper, step",
+      "through the relays until you hear it, then put that number and kind here.",
+      "A wrong guess on a USER relay opens a door instead of making a noise,",
+      "which is why this stays disabled until somebody has actually heard it.",
+      "",
+      "`aux_output` is the pre-section-62 spelling and still works; a file that",
+      "sets only that keeps the old auxiliary meaning. Verify with",
+      "tests/test_buzzer.lua and tests/test_zk_control.lua."
+    ],
+    "enabled": true,
+    "backend": "zk",
+    "relay": 1,
+    "relay_kind": "aux",
+    "register": 40001,
+    "bit": 15,
+    "beep_on_ms": 150,
+    "beep_off_ms": 150,
+    "long_beep_ms": 1500,
+    "wrong_type_beeps": 5
+  },
+
+  "server": {
+    "_comment": "Empty base_url/api_key means \"use the gateway's own REST settings\". Setting api_key here changes it for EVERY script in the process.",
+    "base_url": "",
+    "api_key": "",
+    "active_cards_path": "/api/employees/active",
+    "employee_path": "/api/employees/"
+  },
+
+  "mq": {
+    "_comment": "The broker connection, queue and bindings belong to the gateway's mq configuration section. This only names the events to act on and how many messages to drain per pass of the main loop.",
+    "enabled": true,
+    "max_per_tick": 25,
+    "events": {
+      "created": "employee.card.created",
+      "updated": "employee.card.updated",
+      "revoked": "employee.card.revoked"
+    }
+  },
+
+  "sync": {
+    "interval": 86400,
+    "run_at_start": true,
+    "retry_interval": 900,
+    "expire_at_end_of_day": true,
+    "on_removed": "release",
+    "assign_on_sync": true,
+    "allow_empty_list": false
+  },
+
+  "database": {
+    "_comment": "SQLite, opened with Db.Open(). A relative path resolves against the gateway's config directory -- the same base as the web UI's web.locker_db_path, so both halves find the same file with nothing to keep in step.",
+    "path": "smartlocker.db",
+    "retention_days": 180
+  },
+
+  "logging": {
+    "structured": true,
+    "recent_limit": 200,
+    "debug": false
+  },
+
+  "frontend": {
+    "publish_interval_sec": 2,
+    "variable_prefix": "SL_"
+  }
+}

@@ -25,6 +25,8 @@ cd "$REPO_ROOT"
 USE_DOCKER=0
 RUN_TESTS=1
 BUILD_DIR="$REPO_ROOT/build-ubuntu"
+OUTPUT_DIR="$REPO_ROOT/build-ubuntu"
+DOCKER_PLATFORM=""
 # BUILD ON THE OLDEST RUNTIME YOU MUST SUPPORT, not the newest you have.
 #
 # glibc symbols are versioned and only forward-compatible: a binary built
@@ -45,8 +47,11 @@ VOLUME="hsf-gateway-ubuntu-build"
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --docker)     USE_DOCKER=1; shift ;;
+    --docker-platform|--platform)
+      DOCKER_PLATFORM="$2"; shift 2 ;;
     --image)      IMAGE="$2"; shift 2 ;;
     --build-dir)  BUILD_DIR="$2"; shift 2 ;;
+    --output-dir) OUTPUT_DIR="$2"; shift 2 ;;
     --no-tests)   RUN_TESTS=0; shift ;;
     --jobs)       JOBS="$2"; shift 2 ;;
     -h|--help)
@@ -64,6 +69,14 @@ if [[ $USE_DOCKER -eq 1 ]]; then
   docker info >/dev/null 2>&1 || die "the docker daemon is not running (start Docker Desktop)"
 
   say "Building inside $IMAGE"
+
+  PLATFORM_ARGS=()
+  if [[ -n "$DOCKER_PLATFORM" ]]; then
+    PLATFORM_ARGS+=(--platform "$DOCKER_PLATFORM")
+    # Keep dependency/build volumes separate between x64 and ARM64 builds.
+    VOLUME="${VOLUME}-${DOCKER_PLATFORM//\//-}"
+    say "Docker platform: $DOCKER_PLATFORM"
+  fi
 
   # Git-Bash/MSYS rewrites anything that looks like a Unix path in an argument
   # into a Windows path before the program sees it, so `-w /src` reaches docker
@@ -90,7 +103,7 @@ if [[ $USE_DOCKER -eq 1 ]]; then
   # can be copied back at the end, but nothing heavy is written to it.
   docker volume create "$VOLUME" >/dev/null
 
-  docker run --rm -t \
+  docker run --rm -t "${PLATFORM_ARGS[@]}" \
     -v "$HOST_PATH:/src" \
     -v "$VOLUME:/work" \
     -e VCPKG_DEFAULT_BINARY_CACHE=/work/vcpkg-cache \
@@ -101,13 +114,13 @@ if [[ $USE_DOCKER -eq 1 ]]; then
               VCPKG_ROOT=/work/vcpkg scripts/build-ubuntu.sh \
                 --build-dir /work/build --jobs $JOBS \
                 $([[ $RUN_TESTS -eq 0 ]] && echo --no-tests)
-              mkdir -p /src/build-ubuntu
-              cp /work/build/hsf_gateway /src/build-ubuntu/
+              mkdir -p /src/$(basename "$OUTPUT_DIR")
+              cp /work/build/hsf_gateway /src/$(basename "$OUTPUT_DIR")/
               # This one copy is genuinely optional, so it gets its own || true.
               # Previously the || true sat at the end of one long && chain and
               # swallowed the exit status of the ENTIRE build -- a container
               # that died during apt still reported success.
-              cp /work/build/BUILD_INFO.txt /src/build-ubuntu/ 2>/dev/null || true"
+              cp /work/build/BUILD_INFO.txt /src/$(basename "$OUTPUT_DIR")/ 2>/dev/null || true"
   # `docker run`'s exit status IS the build's. Reporting success unconditionally
   # -- which this did -- meant a container that died during apt still printed
   # "Artifacts copied", and the caller believed it.
@@ -117,8 +130,8 @@ if [[ $USE_DOCKER -eq 1 ]]; then
   # ELF copied out of the container reads as mode 644 and an -x test would fail
   # every time on a build that actually succeeded. The bit is set on the target
   # by package-ubuntu.sh / deploy-ubuntu.sh, where it means something.
-  [[ -s "$REPO_ROOT/build-ubuntu/hsf_gateway" ]] || die "the build reported success but produced no binary"
-  say "Artifacts copied to $REPO_ROOT/build-ubuntu/"
+  [[ -s "$OUTPUT_DIR/hsf_gateway" ]] || die "the build reported success but produced no binary"
+  say "Artifacts copied to $OUTPUT_DIR/"
   exit 0
 fi
 
@@ -144,7 +157,7 @@ APT_PACKAGES=(
   # OpenSSL's Configure is a Perl script; present in the base image today, but
   # naming it means a slimmer base image fails here with a clear message
   # rather than deep inside a dependency build.
-  perl
+  perl bison flex
 )
 if [[ "$(id -u)" -eq 0 ]]; then
   say "Installing build dependencies"
@@ -274,6 +287,7 @@ if [[ -n "$BASELINE" ]]; then
       || die "could not fetch the vcpkg baseline $BASELINE named in vcpkg.json"
   fi
   say "vcpkg baseline $BASELINE present"
+  git -C "$VCPKG_ROOT" checkout --detach "$BASELINE"
 fi
 
 if [[ ! -x "$VCPKG_ROOT/vcpkg" ]]; then
@@ -311,6 +325,17 @@ set(VCPKG_CRT_LINKAGE dynamic)
 set(VCPKG_LIBRARY_LINKAGE static)
 set(VCPKG_CMAKE_SYSTEM_NAME Linux)
 set(VCPKG_BUILD_TYPE release)
+# vcpkg-make 2026-07-09 can drop its generated default configure options on
+# Ubuntu 18 (observed natively under linux/arm64): autotools then falls back to
+# /usr/local, so DESTDIR stages files under usr/local/ and pkg-config validation
+# fails. Supplying the release prefix/linkage explicitly is harmless when the
+# helper also supplies them and keeps make-based ports inside vcpkg's package
+# staging layout when it does not.
+set(VCPKG_MAKE_CONFIGURE_OPTIONS_RELEASE
+    "--prefix=${CURRENT_INSTALLED_DIR}"
+    "--disable-shared"
+    "--enable-static")
+set(VCPKG_MAKE_OPTIONS_RELEASE "prefix=${CURRENT_INSTALLED_DIR}")
 TRIPLET
 cat > "$TRIPLET_DIR/arm64-linux-release.cmake" <<'TRIPLET'
 set(VCPKG_TARGET_ARCHITECTURE arm64)
@@ -318,11 +343,21 @@ set(VCPKG_CRT_LINKAGE dynamic)
 set(VCPKG_LIBRARY_LINKAGE static)
 set(VCPKG_CMAKE_SYSTEM_NAME Linux)
 set(VCPKG_BUILD_TYPE release)
+set(VCPKG_MAKE_CONFIGURE_OPTIONS_RELEASE
+    "--prefix=${CURRENT_INSTALLED_DIR}"
+    "--disable-shared"
+    "--enable-static")
+set(VCPKG_MAKE_OPTIONS_RELEASE "prefix=${CURRENT_INSTALLED_DIR}")
 TRIPLET
 
 case "$(uname -m)" in
   x86_64)        VCPKG_TRIPLET="x64-linux-release" ;;
   aarch64|arm64) VCPKG_TRIPLET="arm64-linux-release" ;;
+  armv7l|armv8l)
+    VCPKG_TRIPLET="arm-linux-release"
+    sed 's/VCPKG_TARGET_ARCHITECTURE arm64/VCPKG_TARGET_ARCHITECTURE arm/' \
+      "$TRIPLET_DIR/arm64-linux-release.cmake" > "$TRIPLET_DIR/arm-linux-release.cmake"
+    ;;
   *) die "unsupported architecture $(uname -m)" ;;
 esac
 say "vcpkg triplet: $VCPKG_TRIPLET (release only)"
@@ -338,7 +373,7 @@ say "vcpkg triplet: $VCPKG_TRIPLET (release only)"
 cmake -S "$REPO_ROOT" -B "$BUILD_DIR" -G Ninja \
   -DCMAKE_BUILD_TYPE=Release \
   -DHSF_ENABLE_ZK=OFF \
-  -DHSF_BUILD_PLUGIN_SDK=OFF \
+  -DHSF_BUILD_PLUGIN_SDK=ON \
   -DCMAKE_EXE_LINKER_FLAGS="-static-libstdc++ -static-libgcc" \
   -DVCPKG_TARGET_TRIPLET="$VCPKG_TRIPLET" \
   -DVCPKG_OVERLAY_TRIPLETS="$TRIPLET_DIR" \
@@ -367,13 +402,15 @@ say "Verifying the binary"
 
 # --- 6. tests ---------------------------------------------------------------
 if [[ $RUN_TESTS -eq 1 ]]; then
+  say "Running gateway and plugin unit tests"
+  ctest --test-dir "$BUILD_DIR" --output-on-failure --no-tests=error --timeout 120
   say "Running the security suite"
-  ./scripts/security-test.sh "$BINARY" 18080 || die "security tests failed"
+  bash ./scripts/security-test.sh "$BINARY" 18080 || die "security tests failed"
   say "Running the Lua packaging suite"
-  ./scripts/package-lua-test.sh "$BINARY" 18090 || die "Lua packaging tests failed"
-  if [[ -x ./scripts/validate-lua.sh ]]; then
+  bash ./scripts/package-lua-test.sh "$BINARY" 18090 || die "Lua packaging tests failed"
+  if [[ -f ./scripts/validate-lua.sh ]]; then
     say "Validating Lua scripts"
-    ./scripts/validate-lua.sh || die "Lua validation failed"
+    bash ./scripts/validate-lua.sh || die "Lua validation failed"
   fi
 else
   say "Skipping tests (--no-tests)"

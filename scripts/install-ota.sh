@@ -58,7 +58,9 @@ else
   [[ -f "$PACKAGE" ]] || { echo "no such package: $PACKAGE" >&2; exit 1; }
   WORK="$(mktemp -d)"
   tar -xzf "$PACKAGE" -C "$WORK"
-  SOURCE="$(find "$WORK" -maxdepth 2 -type f -path '*/bin/hsf_gateway' -printf '%h\n' | head -n1)"
+  # The archive has one release directory between WORK and bin/. maxdepth 3
+  # is required; maxdepth 2 silently rejected every valid packaged release.
+  SOURCE="$(find "$WORK" -maxdepth 3 -type f -path '*/bin/hsf_gateway' -printf '%h\n' | head -n1)"
   SOURCE="${SOURCE%/bin}"
   [[ -n "$SOURCE" ]] || { echo "the package does not contain bin/hsf_gateway" >&2; exit 1; }
 fi

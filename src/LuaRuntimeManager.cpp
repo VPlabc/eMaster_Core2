@@ -62,25 +62,20 @@ LuaRuntimeManager::LuaRuntimeManager() = default;
 
 LuaRuntimeManager::~LuaRuntimeManager() { StopAll(); }
 
-void LuaRuntimeManager::Bind(RestClient* rest, SerialPort* serial, SerialPort* serial2, ModbusClient* modbus,
-                             RfidClient* rfid, ZkController* zk, MqClient* mq, PluginManager* plugins) {
-  rest_ = rest;
-  serial_ = serial;
-  serial2_ = serial2;
-  modbus_ = modbus;
-  rfid_ = rfid;
-  zk_ = zk;
-  mq_ = mq;
-  plugins_ = plugins;
+void LuaRuntimeManager::Bind(ServiceRegistry* services) {
+  services_ = services;
+  SerialPort* serial = services_ ? services_->Get<SerialPort>(ServiceNames::kSerial) : nullptr;
+  ZkController* zk = services_ ? services_->Get<ZkController>(ServiceNames::kZk) : nullptr;
+  MqClient* mq = services_ ? services_->Get<MqClient>(ServiceNames::kMq) : nullptr;
 
   // The device callbacks live here, not on an engine: each device has exactly
   // one callback slot, and with several scripts running there is no single
   // engine that should own it. Every event is delivered to every live runtime.
-  if (serial_) {
+  if (serial) {
     // Fires on SerialPort's own read thread; queued rather than dispatched, so
     // a script sitting in its own polling loop (holding its engine mutex for
     // the whole run) can still receive it -- see LuaEngine::QueueEvent.
-    serial_->SetDataCallback([this](const std::string& line) {
+    serial->SetDataCallback([this](const std::string& line) {
       auto parsed = CitizenIdParser::Parse(line);
       if (parsed) {
         QueueEventAll("OnCitizenCardRead", CitizenIdParser::ToJson(*parsed).dump());
@@ -92,22 +87,22 @@ void LuaRuntimeManager::Bind(RestClient* rest, SerialPort* serial, SerialPort* s
     });
   }
 
-  if (zk_) {
+  if (zk) {
     // All three fire on ZkController's RunLoop thread, which is what
     // LuaEngine::QueueZk*Event requires (it tries to deliver immediately with
     // a try_lock, and try_lock on a mutex the calling thread already holds is
     // undefined behaviour).
-    zk_->SetCardCallback([this](const ZkCardEvent& event) {
+    zk->SetCardCallback([this](const ZkCardEvent& event) {
       for (const auto& runtime : SnapshotRuntimes()) {
         if (runtime->engine->IsRunning()) runtime->engine->QueueZkCardEvent(event);
       }
     });
-    zk_->SetRawCallback([this](const std::string& raw) {
+    zk->SetRawCallback([this](const std::string& raw) {
       for (const auto& runtime : SnapshotRuntimes()) {
         if (runtime->engine->IsRunning()) runtime->engine->QueueZkRawEvent(raw);
       }
     });
-    zk_->SetConnectionCallback([this](bool connected) {
+    zk->SetConnectionCallback([this](bool connected) {
       for (const auto& runtime : SnapshotRuntimes()) {
         if (runtime->engine->IsRunning()) runtime->engine->QueueZkConnectionEvent(connected);
       }
@@ -115,20 +110,20 @@ void LuaRuntimeManager::Bind(RestClient* rest, SerialPort* serial, SerialPort* s
     // Auxiliary input edges (RTLog events 220/221). Same thread, same fan-out:
     // a door sensor or a request-to-exit button wired to the panel's input is
     // something several scripts may legitimately watch.
-    zk_->SetAuxInputCallback([this](int input, bool shorted) {
+    zk->SetAuxInputCallback([this](int input, bool shorted) {
       for (const auto& runtime : SnapshotRuntimes()) {
         if (runtime->engine->IsRunning()) runtime->engine->QueueZkAuxInputEvent(input, shorted);
       }
     });
   }
 
-  if (mq_) {
+  if (mq) {
     // Fires on MqClient's IO thread. Only a notification: the message is
     // already in MqClient's inbox and already acked, so a script may either
     // handle OnMqMessage or poll Mq.Available()/Mq.Get(), and several scripts
     // watching the same broker do not fight over one delivery -- whichever one
     // calls Mq.Get() first takes it out of the shared inbox.
-    mq_->SetMessageCallback([this](const MqMessage& message) {
+    mq->SetMessageCallback([this](const MqMessage& message) {
       RuntimeVariables::Instance().Set("LastMqMessage", message.body);
       QueueEventAll("OnMqMessage", message.body);
     });
@@ -282,7 +277,7 @@ LuaRuntimeManager::StartResult LuaRuntimeManager::StartInternal(const std::strin
   runtime->path = fromSource ? "" : path;
   runtime->engine = std::make_unique<LuaEngine>();
   runtime->engine->SetRuntimeId(runtime->id);
-  runtime->engine->Bind(rest_, serial_, serial2_, modbus_, rfid_, zk_, mq_, plugins_);
+  runtime->engine->Bind(services_);
 
   // Thread first, map second: until it is in the map nothing else can see the
   // runtime, so there is no window where a concurrent Stop() could move the

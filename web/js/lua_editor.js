@@ -9,7 +9,7 @@
     "local", "nil", "not", "or", "repeat", "return", "then", "true", "until", "while",
   ];
   const API_NAMES = [
-    "Rest", "Serial2", "Serial", "Tcp", "Modbus", "Card", "Rfid", "Log", "Config",
+    "Rest", "Serial2", "Serial", "Tcp", "Modbus", "Card", "Rfid", "Log", "Config", "config",
     "SetVariable", "GetVariable", "Sleep",
   ];
 
@@ -147,6 +147,17 @@
     });
   });
 
+  document.getElementById("btnReload").addEventListener("click", () => {
+    const currentName = window.HsfLuaScripts && window.HsfLuaScripts.getCurrentName();
+    if (!currentName) { loadScript(); log("Editor buffer reloaded."); return; }
+    // The backend's restart operation is the atomic reload primitive: it
+    // stops the current runtime and starts the saved script again.
+    postJson("/api/lua/restart?name=" + encodeURIComponent(currentName)).then((res) => {
+      log(res.ok ? "Reloaded " + currentName + "." : "Reload failed: " + (res.error || "unknown error"), !res.ok);
+      if (window.HsfLuaScripts) window.HsfLuaScripts.refresh();
+    });
+  });
+
   document.getElementById("btnPruneRuntimes").addEventListener("click", () => {
     postJson("/api/lua/runtimes/prune").then((res) => {
       log("Forgot " + (res.removed || 0) + " stopped runtime(s).");
@@ -232,6 +243,31 @@
       count > 1 ? count + " running" : running ? "Running" : "Stopped";
 
     renderRuntimes(payload.lua_runtime);
+
+    const variables = payload.variables || {};
+    const variableBody = document.getElementById("luaVariablesBody");
+    variableBody.innerHTML = "";
+    const entries = Object.entries(variables);
+    if (!entries.length) {
+      variableBody.innerHTML = '<tr><td colspan="3" class="text-muted">No variables reported.</td></tr>';
+    } else entries.forEach(([name, value]) => {
+      const row = document.createElement("tr");
+      const type = value === null ? "nil" : Array.isArray(value) ? "table" : typeof value;
+      [name, type, typeof value === "object" ? JSON.stringify(value) : String(value)].forEach((text) => {
+        const cell = document.createElement("td"); cell.textContent = text; row.appendChild(cell);
+      });
+      variableBody.appendChild(row);
+    });
+    document.getElementById("luaRuntimeSummary").textContent =
+      ((payload.lua_runtime && payload.lua_runtime.running_count) || 0) + " running · " + entries.length + " variables";
+    const logs = payload.logs || [];
+    if (logs.length) {
+      const output = document.getElementById("luaOutput");
+      output.textContent = logs.map((entry) => "[" + (entry.timestamp || "") + "] " + (entry.message || "")).join("\n");
+      const events = document.getElementById("luaEvents");
+      events.textContent = logs.filter((entry) => entry.category === "Device" || entry.category === "Plugin" || entry.category === "Lua")
+        .map((entry) => "[" + (entry.timestamp || "") + "] " + (entry.category || "") + " " + (entry.message || "")).join("\n") || "No events yet.";
+    }
 
     // Keeps the tree's state badges honest without polling: the list is only
     // refetched when the number of running scripts actually changes.

@@ -1,0 +1,13 @@
+{
+  "id": "hsf.driver.modbus",
+  "name": "HSF Modbus TCP Driver",
+  "version": "1.1.2",
+  "api_version": "1.0",
+  "description": "Native C11 Modbus TCP driver for FC01/02/03/04/05/06/15/16.",
+  "author": "HSF",
+  "entry": "plugin.so",
+  "execution": "in_process",
+  "platforms": ["linux-x86_64", "linux-arm64", "linux-armhf"],
+  "transports": ["tcp", "mock"],
+  "permissions": ["network"]
+}

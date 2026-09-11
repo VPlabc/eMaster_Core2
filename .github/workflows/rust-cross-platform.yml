@@ -1,0 +1,75 @@
+name: Rust cross-platform validation
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  rust:
+    strategy:
+      matrix:
+        include:
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+          - os: ubuntu-latest
+            target: aarch64-unknown-linux-gnu
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate CMake target profiles
+        shell: pwsh
+        run: ./scripts/validate-presets.ps1
+      - name: Validate Windows 11 IoT profile contract
+        if: matrix.target == 'x86_64-pc-windows-msvc'
+        shell: pwsh
+        run: ./scripts/validate-windows-iot.ps1
+      - name: Validate release signing contract
+        shell: pwsh
+        run: ./scripts/validate-signing-contract.ps1
+      - name: Validate packaging and update safety contract
+        shell: pwsh
+        run: ./scripts/validate-update-safety.ps1
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - name: Format check
+        if: matrix.target == 'x86_64-unknown-linux-gnu'
+        run: cargo fmt --all -- --check
+      - name: Validate POSIX packaging scripts
+        if: matrix.target == 'x86_64-unknown-linux-gnu'
+        run: bash -n scripts/package.sh scripts/verify-package.sh scripts/validate-release.sh
+      - name: Check production connectivity adapters
+        if: matrix.target != 'aarch64-unknown-linux-gnu'
+        run: cargo check -p emaster-lua --features production-transports --target ${{ matrix.target }}
+      - name: Test workspace
+        if: matrix.target != 'aarch64-unknown-linux-gnu'
+        run: cargo test --workspace --target ${{ matrix.target }}
+      - name: Cross-check ARM64 workspace
+        if: matrix.target == 'aarch64-unknown-linux-gnu'
+        run: cargo check --workspace --target ${{ matrix.target }}
+      - name: Clippy
+        if: matrix.target == 'x86_64-pc-windows-msvc'
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+  ubuntu-build:
+    strategy:
+      matrix:
+        include:
+          - image: ubuntu:18.04
+            label: ubuntu-18
+          - image: ubuntu:22.04
+            label: ubuntu-22
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build ${{ matrix.label }} release container
+        run: ./scripts/build-ubuntu.sh --docker --image ${{ matrix.image }} --no-tests --output-dir build-${{ matrix.label }}
+      - name: Check build metadata
+        run: test -s build-${{ matrix.label }}/hsf_gateway && test -s build-${{ matrix.label }}/BUILD_INFO.txt
+      - name: Package and verify Linux x64 artifact
+        if: matrix.label == 'ubuntu-22'
+        env:
+          HSF_REUSE_BUILD_DIR: build-${{ matrix.label }}
+        run: ./scripts/package.sh linux-x64

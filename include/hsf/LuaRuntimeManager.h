@@ -12,6 +12,7 @@
 #include <vector>
 
 #include "hsf/LuaEngine.h"
+#include "hsf/ServiceRegistry.h"
 
 namespace hsf {
 
@@ -77,8 +78,7 @@ class LuaRuntimeManager {
 
   // Native modules every runtime is bound to, plus the device callbacks the
   // manager fans out. Call once before starting anything.
-  void Bind(RestClient* rest, SerialPort* serial, SerialPort* serial2, ModbusClient* modbus, RfidClient* rfid,
-            ZkController* zk, MqClient* mq, PluginManager* plugins = nullptr);
+  void Bind(ServiceRegistry* services);
 
   enum class StartResult {
     kStarted,
@@ -226,14 +226,7 @@ class LuaRuntimeManager {
   std::map<std::string, RuntimePtr> runtimes_;
   std::atomic<int64_t> nextId_{1};
 
-  RestClient* rest_ = nullptr;
-  SerialPort* serial_ = nullptr;
-  SerialPort* serial2_ = nullptr;
-  ModbusClient* modbus_ = nullptr;
-  RfidClient* rfid_ = nullptr;
-  ZkController* zk_ = nullptr;
-  MqClient* mq_ = nullptr;
-  PluginManager* plugins_ = nullptr;
+  ServiceRegistry* services_ = nullptr;
 };
 
 }  // namespace hsf

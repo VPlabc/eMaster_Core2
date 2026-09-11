@@ -1,0 +1,11 @@
+{
+  "platform": "linux",
+  "distribution": "ubuntu-18",
+  "architecture": "x86_64",
+  "zk": false
+  ,"compiler": "gcc-9+",
+  "dependencies": "vcpkg-release-triplet",
+  "install_layout": "releases/current/data",
+  "package_format": "tar.gz",
+  "runtime_verification": "pending-target-environment"
+}

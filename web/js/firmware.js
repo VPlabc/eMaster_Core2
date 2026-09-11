@@ -23,10 +23,10 @@
     if (offeredVersion) text += " · offered " + offeredVersion;
     if (data.error) text += " · " + data.error;
     statusBox.textContent = text;
-    statusBox.className = "alert py-2 small " + (data.state === "error" ? "alert-danger" : data.state === "available" ? "alert-info" : "alert-secondary");
+    statusBox.className = "hsf-inline-status py-2 small " + (data.state === "error" ? "hsf-inline-status-warning" : data.state === "available" ? "hsf-inline-status-info" : "hsf-inline-status-neutral");
   }
   function refresh() {
-    json("/api/update/status").then(renderUpdate).catch(function (e) { statusBox.textContent = e.message; statusBox.className = "alert alert-danger py-2 small"; });
+    json("/api/update/status").then(renderUpdate).catch(function (e) { statusBox.textContent = e.message; statusBox.className = "hsf-inline-status hsf-inline-status-warning py-2 small"; });
     json("/api/lua/packages").then(function (data) {
       var body = document.getElementById("firmwarePackages"); body.textContent = "";
       (data.packages || []).forEach(function (pkg) {
@@ -34,9 +34,27 @@
         var state = pkg.running ? "running · startup enabled" :
           (pkg.run_on_startup ? "start pending" : (pkg.active ? "deployed · stopped" : "stored · stopped"));
         [pkg.app_id || "", pkg.version || "", pkg.file || "", state].forEach(function (v) { var c = document.createElement("td"); c.textContent = v; row.appendChild(c); });
+        var actions = document.createElement("td");
+        var button = document.createElement("button");
+        button.type = "button";
+        button.className = "btn btn-sm " + (pkg.running ? "btn-outline-danger" : "btn-outline-success");
+        button.textContent = pkg.running ? "Stop" : "Run";
+        button.addEventListener("click", function () {
+          button.disabled = true;
+          var action = pkg.running ? "stop" : "start";
+          post("/api/lua/packages/" + action, { file: pkg.file }).then(function () {
+            document.getElementById("packageResult").textContent = (action === "start" ? "Running " : "Stopped ") + pkg.file + "; startup state saved.";
+            refresh();
+          }).catch(function (e) {
+            document.getElementById("packageResult").textContent = e.message;
+            button.disabled = false;
+          });
+        });
+        actions.appendChild(button);
+        row.appendChild(actions);
         body.appendChild(row);
       });
-      if (!body.children.length) { var row = document.createElement("tr"); var c = document.createElement("td"); c.colSpan = 4; c.className = "text-muted"; c.textContent = "No packages imported yet."; row.appendChild(c); body.appendChild(row); }
+      if (!body.children.length) { var row = document.createElement("tr"); var c = document.createElement("td"); c.colSpan = 5; c.className = "text-muted"; c.textContent = "No packages imported yet."; row.appendChild(c); body.appendChild(row); }
     });
   }
   document.getElementById("firmwareCheck").addEventListener("click", function () { statusBox.textContent = "Checking release server..."; post("/api/update/check", {}).then(function (d) { renderUpdate(d.status || d); }).catch(function (e) { statusBox.textContent = e.message; }); });

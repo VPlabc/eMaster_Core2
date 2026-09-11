@@ -29,6 +29,18 @@ fi
 # compiling, since uname would still report the host.
 if [[ $# -ge 1 ]]; then
   PLATFORM="$1"
+  case "$PLATFORM" in
+    linux-x64|linux-arm64|linux-armhf) ;;
+    *) echo "unsupported Linux package target '$PLATFORM'" >&2; exit 2 ;;
+  esac
+  HOST_ARCH="$(uname -m)"
+  case "$PLATFORM:$HOST_ARCH" in
+    linux-x64:x86_64|linux-x64:amd64|linux-arm64:aarch64|linux-arm64:arm64|linux-armhf:armv7l|linux-armhf:armv8l) ;;
+    *)
+      echo "cannot build $PLATFORM on host architecture $HOST_ARCH; use a matching host or cross-build profile" >&2
+      exit 2
+      ;;
+  esac
 else
   case "$(uname -s)" in
     Darwin) OS="macos" ;;
@@ -44,6 +56,8 @@ else
   esac
   PLATFORM="${OS}-${ARCH}"
 fi
+
+TARGET_ARCH="${PLATFORM#*-}"
 
 BUILD_DIR="$REPO_ROOT/build-release"
 STAGE_NAME="HSF-Gateway-v${VERSION}-${PLATFORM}"
@@ -118,8 +132,23 @@ if find "$STAGE_DIR" \( -name '*.db' -o -name 'config.json' \) -print -quit | gr
   find "$STAGE_DIR" \( -name '*.db' -o -name 'config.json' \) >&2
   exit 1
 fi
-
 "$STAGE_DIR/bin/hsf_gateway" --version | tee "$STAGE_DIR/BUILD_INFO.txt"
+
+GIT_COMMIT="$(git rev-parse HEAD 2>/dev/null || printf 'unknown')"
+BUILD_TIMESTAMP="$(date -u +%Y%m%dT%H%M%SZ)"
+cat > "$STAGE_DIR/manifest.json" <<EOF
+{
+  "product": "eMaster",
+  "version": "$VERSION",
+  "build": "$BUILD_TIMESTAMP",
+  "platform": "${PLATFORM%%-*}",
+  "architecture": "$TARGET_ARCH",
+  "git_commit": "$GIT_COMMIT",
+  "build_type": "Release"
+}
+EOF
+
+bash "$REPO_ROOT/scripts/validate-release.sh" "$STAGE_DIR"
 
 # --- archive + checksum --------------------------------------------------
 mkdir -p "$DIST_DIR"
@@ -138,4 +167,5 @@ fi
 
 echo "[package] $TARBALL"
 echo "[package] sha256 $HASH"
+bash "$REPO_ROOT/scripts/verify-package.sh" "$TARBALL" "$VERSION" "$HASH"
 echo "[package] Extract it somewhere clean and run scripts/run.sh before publishing (release.md section 17)."

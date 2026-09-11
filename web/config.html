@@ -20,13 +20,30 @@
 <body>
   <div id="hsfNav"></div>
 
-  <div class="container py-4">
-    <div id="saveAlert" class="alert d-none" role="alert"></div>
+  <div class="container-fluid py-4 hsf-config-workspace">
+    <div class="mb-4">
+      <h1 class="h3 mb-1">Configuration</h1>
+      <p class="text-muted mb-0">Manage gateway identity, communications, protocols and runtime settings from one workspace.</p>
+    </div>
+    <div id="saveAlert" class="d-none" aria-live="polite"></div>
 
+    <div class="row g-4 align-items-start">
+      <aside class="col-lg-3 col-xl-2">
+        <nav class="hsf-config-menu nav nav-pills flex-lg-column" aria-label="Configuration sections" role="tablist">
+          <button class="nav-link active" type="button" data-config-tab="general" role="tab" aria-selected="true">General</button>
+          <button class="nav-link" type="button" data-config-tab="communication" role="tab" aria-selected="false">Communication</button>
+          <button class="nav-link" type="button" data-config-tab="protocols" role="tab" aria-selected="false">Protocols</button>
+          <button class="nav-link" type="button" data-config-tab="runtime" role="tab" aria-selected="false">Runtime</button>
+          <a class="nav-link" href="/security.html">Security</a>
+          <button class="nav-link" type="button" data-config-tab="applications" role="tab" aria-selected="false">Applications</button>
+        </nav>
+      </aside>
+      <main class="col-lg-9 col-xl-10">
     <form id="configForm">
       <!-- Identity. Nothing in the C++ reads these; they exist so scripts can
            ask for Config.Get("system.machine_id") instead of each deployment
            editing a hard-coded value into its Lua (upgrade.md section 5). -->
+      <div id="systemConfiguration" class="hsf-config-panel" data-config-panel="general" role="tabpanel">
       <div class="card p-3 mb-3">
         <h5>System</h5>
         <div class="row g-3">
@@ -41,6 +58,12 @@
           </div>
         </div>
       </div>
+
+      </div>
+
+      <div id="driverConfiguration" class="hsf-config-section hsf-config-panel" data-config-panel="communication" role="tabpanel" hidden>
+      <div id="communicationConfiguration"></div>
+      <div class="border-bottom mb-3 pb-2"><h4 class="h5 mb-0">Built-in Drivers</h4><p class="text-muted small mb-0">System-provided drivers are managed here. Applications declare their own settings below.</p></div>
 
       <div class="card p-3 mb-3">
         <h5>Lua Startup Script</h5>
@@ -151,16 +174,33 @@
         </div>
       </div>
 
-      <div class="card p-3 mb-3">
+      </div>
+
+      <div class="hsf-config-panel" data-config-panel="protocols" role="tabpanel" hidden>
+      <div id="protocolConfiguration" class="card p-3 mb-3">
         <h5>Modbus TCP</h5>
         <p class="text-muted small mb-3">
           Addresses are no longer configured here &mdash; the running Lua script declares the points it uses with
           <code>Modbus.RegisterInput(name, address)</code> and <code>Modbus.RegisterOutput(name, address)</code>,
           and those appear on the Dashboard. Inputs are read as discrete inputs (FC02), outputs as coils (FC01).
         </p>
+        <div class="form-check mb-3">
+          <input class="form-check-input" type="checkbox" name="modbus.enabled" id="modbusEnabled">
+          <label class="form-check-label" for="modbusEnabled">Enable built-in Modbus driver</label>
+        </div>
         <div class="row g-3">
           <div class="col-md-4"><label class="form-label">PLC IP</label><input class="form-control" name="modbus.ip"></div>
           <div class="col-md-2"><label class="form-label">PLC Port</label><input type="number" class="form-control" name="modbus.port"></div>
+        </div>
+        <div class="border-top mt-3 pt-3">
+          <h6>TCP Slave</h6>
+          <div class="row g-3">
+            <div class="col-md-3 form-check ms-2"><input class="form-check-input" type="checkbox" name="modbus.slave_enabled" id="modbusSlaveEnabled"><label class="form-check-label" for="modbusSlaveEnabled">Enable slave</label></div>
+            <div class="col-md-3"><label class="form-label">Listen address</label><input class="form-control" name="modbus.slave_bind"></div>
+            <div class="col-md-2"><label class="form-label">Listen port</label><input type="number" class="form-control" name="modbus.slave_port"></div>
+            <div class="col-md-2"><label class="form-label">Unit ID</label><input type="number" class="form-control" name="modbus.slave_unit_id"></div>
+          </div>
+          <div class="form-text">The slave uses the shared 0x/1x/3x/4x register store. Address ranges are zero-based protocol offsets.</div>
         </div>
         <div class="d-flex align-items-center gap-2 mt-3">
           <button type="button" id="btnTestModbus" class="btn btn-outline-secondary btn-sm">Test Connect</button>
@@ -202,10 +242,13 @@
         <h5>ZK Access Controller</h5>
         <p class="text-muted small mb-2">
           The card reader at the scan position, driven from Lua with
-          <code>zk.connect()</code>. Nothing in the backend connects to it &mdash; these values are
-          here so <code>config/scripts/zkcard.lua</code> can read them instead of carrying a
-          site-specific address. Requires a Windows x86 build (the PullSDK is 32-bit only).
+          <code>zk.connect()</code>. These values let Lua packages use site configuration instead of
+          carrying an address. The automatic backend uses C3/TCP on Linux and PullSDK where available.
         </p>
+        <div class="form-check mb-3">
+          <input class="form-check-input" type="checkbox" name="zk.enabled" id="zkEnabled">
+          <label class="form-check-label" for="zkEnabled">Enable built-in ZK protocol driver</label>
+        </div>
         <div class="row g-3">
           <div class="col-md-4"><label class="form-label">IP</label><input class="form-control" name="zk.ip"></div>
           <div class="col-md-2"><label class="form-label">Port</label><input type="number" class="form-control" name="zk.port"></div>
@@ -339,6 +382,25 @@
       <!-- Structured logging (upgrade.md sections 7-11). Separate from the
            runtime log, which needs no configuration: it is a rotating file plus
            an in-memory buffer and neither grows without bound. These rows do. -->
+      </div>
+
+      <div class="card p-3 mb-3">
+        <h5>Modbus RTU</h5>
+        <p class="text-muted small mb-3">RTU master and slave use CRC16-framed Modbus over a dedicated serial port. Master and slave cannot share the same port.</p>
+        <div class="row g-3">
+          <div class="col-md-4"><label class="form-label">Serial port</label><input class="form-control" name="modbus.rtu_port" placeholder="COM3 or /dev/ttyUSB1"></div>
+          <div class="col-md-2"><label class="form-label">Baud rate</label><input type="number" class="form-control" name="modbus.rtu_baudrate"></div>
+          <div class="col-md-2"><label class="form-label">Data bits</label><input type="number" class="form-control" name="modbus.rtu_data_bits"></div>
+          <div class="col-md-2"><label class="form-label">Stop bits</label><input type="number" class="form-control" name="modbus.rtu_stop_bits"></div>
+          <div class="col-md-2"><label class="form-label">Parity</label><select class="form-select" name="modbus.rtu_parity"><option value="N">None</option><option value="E">Even</option><option value="O">Odd</option></select></div>
+          <div class="col-md-3 form-check ms-2"><input class="form-check-input" type="checkbox" name="modbus.rtu_master_enabled" id="modbusRtuMasterEnabled"><label class="form-check-label" for="modbusRtuMasterEnabled">Enable RTU master</label></div>
+          <div class="col-md-2"><label class="form-label">Master unit ID</label><input type="number" class="form-control" name="modbus.rtu_unit_id"></div>
+          <div class="col-md-3 form-check ms-2"><input class="form-check-input" type="checkbox" name="modbus.rtu_slave_enabled" id="modbusRtuSlaveEnabled"><label class="form-check-label" for="modbusRtuSlaveEnabled">Enable RTU slave</label></div>
+          <div class="col-md-2"><label class="form-label">Slave ID</label><input type="number" class="form-control" name="modbus.rtu_slave_id"></div>
+        </div>
+      </div>
+
+      <div id="runtimeConfiguration" class="hsf-config-panel" data-config-panel="runtime" role="tabpanel" hidden>
       <div class="card p-3 mb-3">
         <h5>Structured Logging</h5>
         <p class="text-muted small mb-2">
@@ -393,7 +455,7 @@
           that fails to start is rolled back automatically. See <code>docs/ota-update.md</code>.
         </p>
 
-        <div id="updateStatusBox" class="alert alert-secondary py-2 px-3 small d-none" role="status"></div>
+        <div id="updateStatusBox" class="hsf-inline-status hsf-inline-status-neutral py-2 px-3 small d-none" role="status"></div>
 
         <div class="row g-3">
           <div class="col-md-3 d-flex align-items-end">
@@ -487,6 +549,7 @@
         </div>
       </div>
 
+      </div>
       <button type="submit" class="btn btn-primary">Save Configuration</button>
     </form>
     <div class="card mt-3">
@@ -499,7 +562,17 @@
         <span class="small text-muted" id="configFileResult"></span>
       </div>
     </div>
+      </main>
+    </div>
   </div>
+
+  <section class="card mt-3 hsf-config-panel" id="applicationConfigSection" data-config-panel="applications" role="tabpanel" hidden>
+    <div class="card-header"><h4 class="h5 mb-0">Applications</h4></div>
+    <div class="card-body">
+      <p class="text-muted small">Application settings are provided by the running Lua applications. Their schemas determine the fields shown here.</p>
+      <div id="applicationConfigCards"></div>
+    </div>
+  </section>
 
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
   <script src="js/layout.js"></script>

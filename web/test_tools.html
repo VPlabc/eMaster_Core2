@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>eMaster Gateway - Test Tools</title>
+  <title>eMaster Gateway - Tools</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
   <link href="css/app.css" rel="stylesheet">
   <!-- Must run before first paint so the stored theme is already on <html>;
@@ -61,6 +61,9 @@
           </button>
           <button class="nav-link" data-bs-toggle="pill" data-bs-target="#tool-mq" type="button">
             RabbitMQ
+          </button>
+          <button class="nav-link" data-bs-toggle="pill" data-bs-target="#tool-network" type="button">
+            Network Diagnostics
           </button>
           <button class="nav-link" data-bs-toggle="pill" data-bs-target="#tool-scenario" type="button">
             SmartLocker Scenario
@@ -954,6 +957,14 @@
                 <p class="text-muted small mb-0 mt-2" id="tlEmpty">Nothing logged yet.</p>
               </div>
             </div>
+          </div>
+
+          <div class="tab-pane fade" id="tool-network">
+            <div class="card"><div class="card-header">Network Diagnostics</div><div class="card-body">
+              <p class="text-muted small">Checks the gateway HTTP endpoint and WebSocket connection from this browser.</p>
+              <div class="d-flex gap-2 align-items-center mb-3"><button class="btn btn-primary" id="netCheck">Run check</button><span class="hsf-badge hsf-badge-idle" id="netBadge">--</span></div>
+              <pre class="hsf-tool-output mb-0" id="netOutput">No check performed.</pre>
+            </div></div>
           </div>
 
         </div>

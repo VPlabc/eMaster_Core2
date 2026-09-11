@@ -1,0 +1,13 @@
+[package]
+name = "emaster-rabbitmq"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[features]
+production-transport = ["dep:lapin", "dep:tokio"]
+
+[dependencies]
+emaster-event = { path = "../emaster-event" }
+lapin = { version = "4.10.0", optional = true }
+tokio = { version = "1.40", features = ["rt-multi-thread", "macros"], optional = true }

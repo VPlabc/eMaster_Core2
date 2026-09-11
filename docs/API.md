@@ -864,3 +864,18 @@ Log types are declared in `config/log_definitions.json`. A write is rejected
 whole on an unknown type, an undeclared field, a missing required field, or a
 value that does not parse as its declared type — which is what makes a
 misspelled field a loud error rather than a silently missing column.
+
+## Lua project dynamic configuration
+
+Lua projects that register `config_schema.lua` through `config.register_schema`
+are exposed through the shared schema-driven API:
+
+- `GET /api/lua/projects`
+- `GET /api/lua/projects/{project}/config/schema`
+- `GET /api/lua/projects/{project}/config`
+- `PUT /api/lua/projects/{project}/config`
+
+The GET value response masks `password`/`secret` fields as `********`. Sending
+that mask back preserves the stored secret. PUT validates the complete merged
+configuration and rejects the entire update if any field has an invalid type,
+range, required value, or select option.

@@ -6,6 +6,23 @@
 // reach a PLC on an isolated network segment. Card Clients keeps its own
 // script (card_clients.js) since that panel predates this page.
 (function () {
+  const networkCheck = document.getElementById("netCheck");
+  if (networkCheck) networkCheck.addEventListener("click", async function () {
+    const badge = document.getElementById("netBadge");
+    const output = document.getElementById("netOutput");
+    const started = performance.now();
+    badge.textContent = "Checking"; badge.className = "hsf-badge hsf-badge-warn";
+    try {
+      const response = await fetch("/api/health", { cache: "no-store" });
+      const body = await response.text();
+      const websocket = window.HsfWs ? "shared WebSocket client loaded" : "WebSocket client unavailable";
+      badge.textContent = response.ok ? "OK" : "HTTP " + response.status;
+      badge.className = "hsf-badge " + (response.ok ? "hsf-badge-ok" : "hsf-badge-bad");
+      output.textContent = "HTTP /api/health: " + response.status + " (" + Math.round(performance.now() - started) + " ms)\n" + websocket + "\n" + body;
+    } catch (error) {
+      badge.textContent = "Failed"; badge.className = "hsf-badge hsf-badge-bad"; output.textContent = String(error);
+    }
+  });
   // ---------------------------------------------------------------- helpers
 
   // "error" reads better at the call sites than the stylesheet's "bad".

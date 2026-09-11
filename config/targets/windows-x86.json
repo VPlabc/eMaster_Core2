@@ -1,0 +1,10 @@
+{
+  "platform": "windows",
+  "architecture": "x86",
+  "zk": true,
+  "compiler": "MSVC",
+  "dependencies": "vcpkg-x86-windows",
+  "install_layout": "current/data",
+  "package_format": "zip",
+  "notes": "Required for the 32-bit ZKTeco PullSDK DLL."
+}

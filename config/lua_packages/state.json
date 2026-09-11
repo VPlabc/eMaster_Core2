@@ -1,0 +1,19 @@
+{
+  "active": "",
+  "history": [
+    {
+      "action": "run",
+      "at": "2026-08-26T17:00:14Z",
+      "by": "admin",
+      "package": "smartlocker-1.0.2.pkg"
+    },
+    {
+      "action": "stop",
+      "at": "2026-08-26T17:00:19Z",
+      "by": "admin",
+      "package": "smartlocker-1.0.2.pkg"
+    }
+  ],
+  "previous": "",
+  "running": []
+}

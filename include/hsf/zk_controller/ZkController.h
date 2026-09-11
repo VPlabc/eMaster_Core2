@@ -129,6 +129,12 @@ class ZkController {
   void Start();
   void Stop();
 
+  // Master switch for the built-in protocol driver. Disabling immediately
+  // closes an existing session and blocks new zk.connect() calls; enabling
+  // permits running Lua packages to connect again.
+  void SetEnabled(bool enabled);
+  bool IsEnabled() const;
+
   // Which protocol to reach the panel with: "auto" (default), "pullsdk" or
   // "c3". See the note on the backend members below for why this exists --
   // in short, PullSDK is a 32-bit Windows DLL and C3 is not, so this is what
@@ -284,6 +290,7 @@ class ZkController {
   std::atomic<bool> threadRunning_{false};
   std::thread thread_;
 
+  std::atomic<bool> enabled_{true};
   std::atomic<bool> connected_{false};
   std::atomic<bool> reconnecting_{false};
   // Stamped the moment reconnecting_ flips to true (DoHeartbeat), so

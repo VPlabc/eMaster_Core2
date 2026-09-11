@@ -1,0 +1,95 @@
+name: Firmware build matrix
+on:
+  workflow_call:
+    inputs:
+      ref:
+        type: string
+        required: true
+      channel:
+        type: string
+        default: dev
+permissions:
+  contents: read
+jobs:
+  package:
+    name: ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {target: windows-x86, os: windows-2022, arch: x86}
+          - {target: windows-x64, os: windows-2022, arch: x64}
+          - {target: windows-arm64, os: windows-2022, arch: arm64}
+          - {target: linux-x64, os: ubuntu-22.04, platform: linux/amd64}
+          - {target: linux-arm64, os: ubuntu-22.04, platform: linux/arm64}
+          - {target: linux-armhf, os: ubuntu-22.04, platform: linux/arm/v7}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Read pinned dependency baseline
+        id: baseline
+        shell: pwsh
+        run: |
+          $baseline = (Get-Content vcpkg.json | ConvertFrom-Json).'builtin-baseline'
+          "commit=$baseline" >> $env:GITHUB_OUTPUT
+      - uses: lukka/run-vcpkg@v11
+        if: runner.os == 'Windows'
+        with:
+          vcpkgGitCommitId: ${{ steps.baseline.outputs.commit }}
+          runVcpkgInstall: false
+      - name: Ensure MSVC ARM64 tools are installed
+        if: matrix.arch == 'arm64'
+        shell: pwsh
+        run: |
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $component = 'Microsoft.VisualStudio.Component.VC.Tools.ARM64'
+          $installed = & $vswhere -latest -products '*' -requires $component -property installationPath
+          if (-not $installed) {
+            $vsPath = & $vswhere -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+            if (-not $vsPath) { throw 'Visual Studio C++ installation not found' }
+            $installer = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vs_installer.exe"
+            $arguments = "modify --installPath `"$vsPath`" --add $component --quiet --norestart"
+            $process = Start-Process $installer -ArgumentList $arguments -WindowStyle Hidden -Wait -PassThru
+            if ($process.ExitCode -notin 0, 3010) { throw "ARM64 tool installation failed: $($process.ExitCode)" }
+          }
+      - name: Build, test and package Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./scripts/package.ps1 -Arch '${{ matrix.arch }}' -RunTests
+      - uses: docker/setup-qemu-action@v3
+        if: runner.os == 'Linux'
+        with:
+          platforms: arm64,arm
+      - name: Build, test and package Linux in target userspace
+        if: runner.os == 'Linux'
+        env:
+          TARGET: ${{ matrix.target }}
+          PLATFORM: ${{ matrix.platform }}
+        run: |
+          docker run --rm --platform "$PLATFORM" \
+            -v "$GITHUB_WORKSPACE:/src" -w /src \
+            -e VCPKG_ROOT=/tmp/vcpkg -e VCPKG_FORCE_SYSTEM_BINARIES=1 \
+            ubuntu:22.04 bash scripts/ci/linux-package.sh "$TARGET"
+      - name: Generate firmware artifact metadata
+        env:
+          BUILD_ID: ${{ github.run_id }}.${{ github.run_attempt }}
+          CHANNEL: ${{ inputs.channel }}
+        shell: pwsh
+        run: python scripts/ci/release.py finalize dist --build-id "$env:BUILD_ID" --channel "$env:CHANNEL"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: package-${{ matrix.target }}
+          if-no-files-found: error
+          retention-days: 14
+          path: |
+            dist/eMaster-*.zip
+            dist/eMaster-*.tar.gz
+            dist/*.manifest.json

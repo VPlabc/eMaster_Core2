@@ -1,0 +1,242 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>eMaster Gateway - Dashboard</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="css/app.css" rel="stylesheet">
+  <!-- Must run before first paint so the stored theme is already on <html>;
+       loading it with the scripts at the end of <body> flashes light-then-dark. -->
+  <script src="js/theme.js"></script>
+  <!-- Gates the page: redirects to /login.html when there is no session, and
+       enforces any hsf-require-role meta above. Must precede layout.js. -->
+  <script src="js/auth.js"></script>
+</head>
+<body>
+  <div id="hsfNav"></div>
+
+  <div class="container-fluid py-4">
+    <!-- Dashboard splits into Overview and System Info per updateUI.md
+         section 35. System Info is about the Lua runtime specifically, not
+         general host hardware, which is what Overview already covers. -->
+    <ul class="nav nav-tabs mb-3" role="tablist">
+      <li class="nav-item" role="presentation">
+        <button class="nav-link active" id="tabOverviewBtn" data-bs-toggle="tab"
+                data-bs-target="#tabOverview" type="button" role="tab">Overview</button>
+      </li>
+      <li class="nav-item" role="presentation">
+        <button class="nav-link" id="tabSystemInfoBtn" data-bs-toggle="tab"
+                data-bs-target="#tabSystemInfo" type="button" role="tab">System Info</button>
+      </li>
+    </ul>
+
+    <div class="tab-content">
+    <div class="tab-pane fade show active" id="tabOverview" role="tabpanel">
+    <div class="row g-3 mb-3">
+      <div class="col-6 col-md-2">
+        <div class="card stat-card p-3">
+          <div class="stat-label">CPU Usage</div>
+          <div class="stat-value" id="statCpu">--%</div>
+        </div>
+      </div>
+      <div class="col-6 col-md-2">
+        <div class="card stat-card p-3">
+          <div class="stat-label">RAM Usage</div>
+          <div class="stat-value" id="statRam">-- MB</div>
+        </div>
+      </div>
+      <div class="col-6 col-md-2">
+        <div class="card stat-card p-3">
+          <div class="stat-label">Disk Usage</div>
+          <div class="stat-value" id="statDisk">-- GB</div>
+        </div>
+      </div>
+      <div class="col-6 col-md-2">
+        <div class="card stat-card p-3">
+          <div class="stat-label">Uptime</div>
+          <div class="stat-value" id="statUptime">--</div>
+        </div>
+      </div>
+      <div class="col-6 col-md-2">
+        <div class="card stat-card p-3">
+          <div class="stat-label">Threads</div>
+          <div class="stat-value" id="statThreads">--</div>
+        </div>
+      </div>
+      <div class="col-6 col-md-2">
+        <div class="card stat-card p-3">
+          <div class="stat-label">Network</div>
+          <div class="stat-value"><span class="status-dot" id="statNetworkDot"></span><span id="statNetwork">--</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="row g-3 mb-3">
+      <div class="col-lg-8">
+        <div class="card p-3 h-100">
+          <div class="hsf-panel-title">CPU / RAM History</div>
+          <!-- Height comes from .hsf-chart-wrap (340px, responsive) rather
+               than the canvas `height` attribute -- the old 90px canvas was
+               the "chart too short" problem. -->
+          <div class="hsf-chart-wrap">
+            <canvas id="historyChart"></canvas>
+          </div>
+        </div>
+      </div>
+      <div class="col-lg-4">
+        <div class="card p-3 h-100">
+          <div class="hsf-panel-title">Connection Status</div>
+          <div class="d-flex flex-column gap-2">
+            <div class="hsf-led is-disconnected" id="ledRest">
+              <span class="hsf-led-label">REST API</span>
+              <span class="hsf-led-right">
+                <span class="hsf-led-value" id="txtRest">--</span>
+                <span class="hsf-led-meta" id="metaRest"></span>
+              </span>
+            </div>
+            <div class="hsf-led is-disconnected" id="ledPlc">
+              <span class="hsf-led-label">PLC / Modbus</span>
+              <span class="hsf-led-right">
+                <span class="hsf-led-value" id="txtPlc">--</span>
+                <span class="hsf-led-meta" id="metaPlc"></span>
+              </span>
+            </div>
+            <div class="hsf-led is-disconnected" id="ledRfid">
+              <span class="hsf-led-label">RFID Reader</span>
+              <span class="hsf-led-right">
+                <span class="hsf-led-value" id="txtRfid">--</span>
+                <span class="hsf-led-meta" id="metaRfid"></span>
+              </span>
+            </div>
+            <div class="hsf-led is-disconnected" id="ledSerial">
+              <span class="hsf-led-label">Serial Port</span>
+              <span class="hsf-led-right">
+                <span class="hsf-led-value" id="txtSerial">--</span>
+                <span class="hsf-led-meta" id="metaSerial"></span>
+              </span>
+            </div>
+            <div class="hsf-led is-disconnected" id="ledLua">
+              <span class="hsf-led-label">Lua Script</span>
+              <span class="hsf-led-right">
+                <span class="hsf-led-value" id="txtLua">--</span>
+                <span class="hsf-led-meta" id="metaLua"></span>
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="row g-3 mb-3">
+      <div class="col-lg-6">
+        <div class="card p-3 h-100">
+          <div class="hsf-panel-title">PLC Input</div>
+          <div id="plcInputs" class="d-flex flex-column gap-2"></div>
+          <div class="hsf-io-empty" id="plcInputsEmpty">
+            No inputs registered. A running Lua script declares them with
+            <code>Modbus.RegisterInput(name, address)</code>.
+          </div>
+        </div>
+      </div>
+      <div class="col-lg-6">
+        <div class="card p-3 h-100">
+          <div class="d-flex align-items-center justify-content-between mb-2">
+            <div class="hsf-panel-title mb-0">PLC Output</div>
+            <!-- Only shown once an output has actually been driven from
+                 here, so it reads as a live warning rather than decoration. -->
+            <span class="hsf-badge hsf-badge-warn" id="testModeBadge" hidden>Test mode</span>
+          </div>
+          <div id="plcOutputs" class="d-flex flex-column gap-2"></div>
+          <div class="hsf-io-empty" id="plcOutputsEmpty">
+            No outputs registered. A running Lua script declares them with
+            <code>Modbus.RegisterOutput(name, address)</code>.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card p-3 mb-3">
+      <div class="d-flex align-items-center justify-content-between mb-2">
+        <div class="hsf-panel-title mb-0">PLC Registers</div>
+        <span class="text-muted small">
+          FC03 holding = read/write &middot; FC04 input = read-only
+        </span>
+      </div>
+      <div class="table-responsive">
+        <table class="table table-sm align-middle mb-0 hsf-reg-table" id="plcRegisters">
+          <thead>
+            <tr>
+              <th>Name</th><th>Address</th><th>Type</th><th>Endian</th>
+              <th>Raw</th><th>Value</th><th></th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div class="hsf-io-empty" id="plcRegistersEmpty">
+        No registers declared. A running Lua script declares them with
+        <code>Modbus.RegisterRegister(name, address, { type = "float32" })</code>.
+      </div>
+    </div>
+
+    <div class="card p-3">
+      <div class="hsf-panel-title">Runtime Variables</div>
+      <div class="table-responsive">
+        <table class="table table-sm table-striped mb-0" id="variablesTable">
+          <thead><tr><th>Name</th><th>Value</th><th>Type</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+    </div><!-- /tabOverview -->
+
+    <div class="tab-pane fade" id="tabSystemInfo" role="tabpanel">
+      <div class="card p-3">
+        <div class="d-flex align-items-center">
+          <div class="hsf-panel-title mb-0">Running Lua Scripts</div>
+          <span class="hsf-badge hsf-badge-idle ms-2" id="luaRuntimeCount" hidden></span>
+        </div>
+
+        <!-- upgrade.md section 24's table: every runtime with its own state,
+             CPU, RAM, core and runtime id. -->
+        <div class="table-responsive" id="luaRuntimeWrap" hidden>
+          <table class="table table-sm mb-0" id="luaRuntimeTable">
+            <thead>
+              <tr>
+                <th>Script</th><th>State</th><th>CPU</th><th>RAM</th>
+                <th>Core</th><th>Runtime</th><th>Started</th><th>Uptime</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+
+        <!-- updateUI.md section 11: empty rather than fabricated figures when
+             nothing is running. -->
+        <div class="hsf-io-empty" id="luaRuntimeEmpty">
+          No Lua scripts are currently running.
+        </div>
+
+        <!-- One entry per failed runtime (section 23), not a single "last
+             error": with several scripts running, whose error it was is the
+             first thing worth knowing. -->
+        <div class="mt-3" id="luaRuntimeErrorWrap" hidden>
+          <div class="hsf-panel-title mb-1">Script Errors</div>
+          <div id="luaRuntimeError"></div>
+        </div>
+      </div>
+    </div><!-- /tabSystemInfo -->
+    </div><!-- /tab-content -->
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+  <script src="js/layout.js"></script>
+  <!-- Update popup: on every page with the shared chrome, so a release that
+       lands while someone is on Logs or Test Tools is still noticed. -->
+  <script src="js/update.js"></script>
+  <script src="js/ws.js"></script>
+  <script src="js/dashboard.js"></script>
+</body>
+</html>

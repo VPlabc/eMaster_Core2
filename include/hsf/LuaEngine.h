@@ -11,6 +11,7 @@
 #include <vector>
 #include <utility>
 
+#include "hsf/ServiceRegistry.h"
 #include "hsf/TcpSocket.h"
 
 struct lua_State;
@@ -129,6 +130,7 @@ class LuaEngine {
   // scripts can consume side by side.
   void Bind(RestClient* rest, SerialPort* serial, SerialPort* serial2, ModbusClient* modbus, RfidClient* rfid,
              ZkController* zk, MqClient* mq, PluginManager* plugins = nullptr);
+  void Bind(ServiceRegistry* services);
 
   // Compiles `code` without executing it; used for the editor's "Validate"
   // action. Returns true and leaves `error` empty on success. Static because
@@ -383,6 +385,13 @@ class LuaEngine {
   static int Lua_Config_Set(lua_State* L);
   static int Lua_Config_Exists(lua_State* L);
   static int Lua_Config_GetCategory(lua_State* L);
+  static int Lua_DynamicConfig_RegisterSchema(lua_State* L);
+  static int Lua_DynamicConfig_Extend(lua_State* L);
+  static int Lua_DynamicConfig_Get(lua_State* L);
+  static int Lua_DynamicConfig_Set(lua_State* L);
+  static int Lua_DynamicConfig_GetAll(lua_State* L);
+  static int Lua_DynamicConfig_SetAll(lua_State* L);
+  static int Lua_DynamicConfig_GetSchema(lua_State* L);
 
   // SQL, over this engine's own SqlDatabase connection. Deliberately a real
   // SQL surface, unlike Config.* -- request/SmartLocker/SmartLockerPlan.md
