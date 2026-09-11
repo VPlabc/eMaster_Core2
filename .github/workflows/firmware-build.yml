@@ -36,10 +36,12 @@ jobs:
           python-version: '3.13'
       - name: Read pinned dependency baseline
         id: baseline
-        shell: pwsh
+        shell: bash
         run: |
-          $baseline = (Get-Content vcpkg.json | ConvertFrom-Json).'builtin-baseline'
-          "commit=$baseline" >> $env:GITHUB_OUTPUT
+          python - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          print("commit=" + json.load(open("vcpkg.json", encoding="utf-8"))["builtin-baseline"])
+          PY
       - uses: lukka/run-vcpkg@v11
         if: runner.os == 'Windows'
         with:
